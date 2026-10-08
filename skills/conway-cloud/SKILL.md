@@ -1,7 +1,7 @@
 ---
 name: conway-cloud
 description: Operate Conway Cloud from AI agents, with Automaton-first defaults and HTTP fallback.
-auto-activate: true
+auto-activate: false
 ---
 
 # Conway Cloud Operations
