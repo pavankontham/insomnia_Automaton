@@ -106,7 +106,7 @@ export function craftsmanshipTemplate(facts: SiteFacts): string {
 <title>${escape(facts.name)} · ${escape(facts.city)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=${theme.fontQuery}&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?${theme.fontQuery}&display=swap" rel="stylesheet"/>
 <style>
 :root{
   --bg:${theme.bg}; --ink:${theme.ink}; --muted:${theme.muted};
