@@ -67,7 +67,16 @@ export function rememberBusiness(entity: string, fact: string, weight = 1) {
     .run(randomUUID(), new Date().toISOString(), entity, fact, weight);
 }
 
-/** Retrieve compressed context within a token budget (priority order). */
+/** Per-tier ceilings (Conway-inspired); unused budget rolls to later tiers. */
+export const MEMORY_TIER_BUDGETS = Object.freeze({
+  working: 280,
+  episodic: 320,
+  semantic: 240,
+  procedural: 160,
+  business: 200,
+});
+
+/** Retrieve compressed context within a token budget (priority order + tier caps). */
 export function retrieveWithinBudget(budgetTokens = 1200, query = ""): MemoryBlock {
   const db = getDb();
   const now = new Date().toISOString();
@@ -136,13 +145,19 @@ export function retrieveWithinBudget(budgetTokens = 1200, query = ""): MemoryBlo
   ];
 
   let used = 0;
+  let rollover = 0;
   for (const [tier, items] of tiers) {
+    const tierCap = MEMORY_TIER_BUDGETS[tier] + rollover;
+    let tierUsed = 0;
     for (const item of items) {
       const cost = estimateTokens(item);
       if (used + cost > budgetTokens) break;
+      if (tierUsed + cost > tierCap) break;
       block[tier].push(item);
       used += cost;
+      tierUsed += cost;
     }
+    rollover = Math.max(0, tierCap - tierUsed);
   }
   block.tokenEstimate = used;
   return block;
