@@ -276,9 +276,11 @@ export function completeDealOnPayment(invoiceId: string) {
     dealId: inv.dealId,
     description: `Cleared payment ${invoiceId}`,
   });
+  // ledger.recordClearedPayment already sets closed_won + payment_cleared;
+  // advance to fulfillment so domain/handoff work can proceed.
   getDb()
     .prepare(
-      `UPDATE deals SET stage = 'fulfillment', updated_at = ? WHERE id = ?`,
+      `UPDATE deals SET stage = 'fulfillment', updated_at = ? WHERE id = ? AND payment_cleared = 1`,
     )
     .run(new Date().toISOString(), inv.dealId);
   const sales = listChildren().find((c) => c.role === "sales");
