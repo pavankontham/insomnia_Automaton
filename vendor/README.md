@@ -20,3 +20,11 @@ This directory holds a shallow clone of [Conway-Research/automaton](https://gith
 ## Adapter seam (Phase C)
 
 See `src/adapters/conway-stub.ts` for the future Conway Cloud plug-in surface. Free/local adapters are the Day-0 default.
+
+## FreeLLMAPI (token stack)
+
+FreeLLMAPI runs **outside** this repo (local service, typically `http://127.0.0.1:43128/v1`) so Next.js does not watch its `node_modules`.
+
+Upstream: [tashfeenahmed/freellmapi](https://github.com/tashfeenahmed/freellmapi)
+
+Our runtime uses `FREELLMAPI_BASE_URL` + `FREELLMAPI_API_KEY` with prompt compression (`src/inference/compress.ts`) and project KB memory expansion (`src/memory/project-kb.ts`).

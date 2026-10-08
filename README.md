@@ -22,14 +22,20 @@ pnpm dev
 
 Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 
-Optional free inference keys (new accounts — do not reuse old ones):
+### Inference / tokens
+
+Primary path: **[FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi)** — local OpenAI-compatible router that stacks free provider tiers (Groq, Google, …) behind one key.
 
 ```bash
+# FreeLLMAPI running separately (e.g. http://127.0.0.1:43128/v1)
+export FREELLMAPI_BASE_URL=http://127.0.0.1:43128/v1
+export FREELLMAPI_API_KEY=freellmapi-...
+# Provider keys are added inside FreeLLMAPI; optional direct fallbacks:
 export GROQ_API_KEY=...
 export GEMINI_API_KEY=...
 ```
 
-Without keys, the runtime uses local heuristics (true zero-cost path).
+Built-in **prompt compression**, **project KB memory expansion**, and **partitioned child contexts** keep the effective context large while spending few tokens. Without FreeLLMAPI/keys, the runtime falls back to local heuristics.
 
 ## Owner control panel
 

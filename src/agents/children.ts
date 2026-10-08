@@ -77,7 +77,10 @@ export function spawnChild(opts: {
         demos: 0,
         replies: 0,
         sales: 0,
+        tokens_saved: 0,
+        infer_calls: 0,
         expected_roi: roi,
+        context_mode: "partitioned",
       }),
       evaluateBy,
       "Spawned under ROI gate",
@@ -93,6 +96,8 @@ export function bumpChildKpi(
     demos: number;
     replies: number;
     sales: number;
+    tokens_saved: number;
+    infer_calls: number;
   }>,
   costDelta = 0,
   revenueDelta = 0,

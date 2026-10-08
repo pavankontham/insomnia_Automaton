@@ -54,3 +54,5 @@ next-env.d.ts
 
 agent-tools/
 vendor/conway-automaton/
+/data/kb/**
+!/data/kb/.gitkeep

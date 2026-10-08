@@ -4,6 +4,7 @@ import { scoreProspect } from "@/business/pipeline";
 import { syncSkillsToDb } from "@/skills/loader";
 import { buildCapabilityMap } from "@/runtime/parent";
 import { rememberFact, saveProcedure } from "@/memory";
+import { seedProjectKb } from "@/memory/project-kb";
 
 const prospects = [
   {
@@ -143,12 +144,14 @@ export function ensureSeeded() {
   }
   syncSkillsToDb();
   buildCapabilityMap();
+  seedProjectKb();
   rememberFact(
     "mission",
     "objective",
     "Create genuine value humans pay for within 10 days at $0 seed",
   );
   rememberFact("mission", "markets", "US,UK,CA,AU,NZ,IE");
+  rememberFact("infra", "inference", "FreeLLMAPI primary; compress prompts; KB retrieval");
   saveProcedure("close_deal", [
     "Owner approves idea pack",
     "Build + QA demo",
@@ -156,5 +159,12 @@ export function ensureSeeded() {
     "Negotiate within band",
     "Invoice → awaiting_payment",
     "Payment clears → closed_won → fulfill",
+  ]);
+  saveProcedure("token_discipline", [
+    "Use templates/code for deterministic work",
+    "compressPrompt before inference",
+    "Route via FreeLLMAPI auto/auto:fast/auto:smart",
+    "Partition child contexts; retrieve KB by query",
+    "Track savedTokens and kill low-ROI children",
   ]);
 }

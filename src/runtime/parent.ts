@@ -7,9 +7,11 @@ import {
   rememberWorking,
   retrieveWithinBudget,
 } from "@/memory";
+import { kbSearch, seedProjectKb } from "@/memory/project-kb";
 import { activeSkillPrompt, syncSkillsToDb } from "@/skills/loader";
 import { evaluateSurvival, getEpoch, shutdownIfRed } from "@/runtime/survival";
 import { evaluateChildren, listChildren, spawnChild } from "@/agents/children";
+import { buildChildContext } from "@/agents/context";
 import {
   advanceDeal,
   buildDemoForProspect,
@@ -32,21 +34,39 @@ export function buildCapabilityMap(): CapabilityRow[] {
   const rows: CapabilityRow[] = [
     {
       category: "Reasoning",
+      name: "FreeLLMAPI stacked free tiers",
+      available: Boolean(process.env.FREELLMAPI_API_KEY),
+      notes: process.env.FREELLMAPI_BASE_URL || "http://127.0.0.1:43128/v1",
+    },
+    {
+      category: "Reasoning",
       name: "Local heuristics",
       available: true,
-      notes: "Default zero-cost",
+      notes: "Last-resort zero-cost",
     },
     {
       category: "Reasoning",
       name: "Groq free tier",
       available: Boolean(process.env.GROQ_API_KEY),
-      notes: "Set GROQ_API_KEY",
+      notes: "Via FreeLLMAPI or direct",
     },
     {
       category: "Reasoning",
       name: "Gemini free tier",
       available: Boolean(process.env.GEMINI_API_KEY),
-      notes: "Set GEMINI_API_KEY",
+      notes: "Via FreeLLMAPI or direct",
+    },
+    {
+      category: "Token optimization",
+      name: "Prompt compress + FreeLLM compress header",
+      available: true,
+      notes: "lossless/standard/aggressive by survival",
+    },
+    {
+      category: "Memory",
+      name: "Project KB expansion",
+      available: true,
+      notes: "data/kb + project_kb retrieval",
     },
     {
       category: "Coding",
@@ -121,30 +141,62 @@ export async function runHeartbeatTick(): Promise<{
   }
 
   syncSkillsToDb();
+  seedProjectKb();
   const survival = shutdownIfRed();
   evaluateChildren();
   buildCapabilityMap();
 
-  const memory = retrieveWithinBudget(1000, "business");
-  rememberWorking("tick", `Heartbeat ${new Date().toISOString()} survival=${survival}`);
+  const memory = retrieveWithinBudget(700, "business mission");
+  const kb = kbSearch("mission infra memory children", 500);
+  rememberWorking(
+    "tick",
+    `Heartbeat survival=${survival} freellmapi=${Boolean(process.env.FREELLMAPI_API_KEY)}`,
+  );
 
   // Ensure specialist children exist (parent decides which)
   const children = listChildren();
-  const needed = ["research", "developer", "sales", "qa", "finance"] as const;
+  const needed = [
+    "research",
+    "developer",
+    "sales",
+    "qa",
+    "finance",
+    "optimizer",
+  ] as const;
   for (const role of needed) {
     if (!children.some((c) => c.role === role && c.status === "active")) {
       try {
         spawnChild({
           role,
-          objective: `${role} specialist for EN local-business websites`,
+          objective: `${role} specialist — partitioned context, ROI-gated`,
           expectedValueCents: 150000,
-          operatingCostCents: 100,
+          operatingCostCents: 50,
         });
         actions.push(`spawned:${role}`);
       } catch (e) {
         actions.push(`spawn_skip:${role}:${(e as Error).message}`);
       }
     }
+  }
+
+  // Optimizer child: token-efficiency pass with tiny partitioned context
+  try {
+    const optCtx = buildChildContext(
+      "optimizer",
+      "List 3 concrete token-saving actions for this tick.",
+    );
+    const opt = await infer({
+      task: "classify",
+      survival,
+      prompt: optCtx,
+    });
+    rememberEpisode(
+      `optimizer: saved~${opt.savedTokens} via ${opt.model.provider}/${opt.model.model} :: ${opt.text.slice(0, 160)}`,
+      0.5,
+    );
+    actions.push(`optimizer:${opt.model.provider}:${opt.savedTokens}tok_saved`);
+  } catch (e) {
+    actions.push(`optimizer_skip:${(e as Error).message}`);
   }
 
   // Day-phase heuristics by epoch progress (schedule is guidance; approved ideas unlock sell loop early)
@@ -202,18 +254,31 @@ export async function runHeartbeatTick(): Promise<{
     survival,
     prompt: [
       "You are insomnia_Automaton parent CEO.",
-      activeSkillPrompt(),
+      "Stable prefix: create genuine value; close only on cleared payment; never touch owner treasury.",
+      // Progressive disclosure: skill names only, not full bodies every turn
+      activeSkillPrompt().slice(0, 1800),
+      kb,
       formatMemoryForPrompt(memory),
       `Day ${day}/10 survival=${survival}`,
       `Treasury AI=${getTreasury().ai_cents}c Owner=${getTreasury().owner_cents}c`,
-      `Models: ${JSON.stringify(listCatalog().strategy)}`,
-      "Propose next high-ROI action under constitution.",
+      `Route catalog: ${JSON.stringify(listCatalog().strategy.map((m) => m.provider + "/" + m.model))}`,
+      "Propose next high-ROI action under constitution. Be brief.",
     ].join("\n\n"),
   });
-  rememberEpisode(`CEO thought: ${strategy.text.slice(0, 200)}`, 0.4);
-  actions.push("strategy_infer");
+  rememberEpisode(
+    `CEO (${strategy.model.provider}/${strategy.model.model} saved=${strategy.savedTokens}): ${strategy.text.slice(0, 200)}`,
+    0.4,
+  );
+  actions.push(
+    `strategy_infer:${strategy.model.provider}:saved${strategy.savedTokens}`,
+  );
 
-  writeCeoReport(day, survival, actions, strategy.text);
+  writeCeoReport(
+    day,
+    survival,
+    actions,
+    `${strategy.text}\n\n[via ${strategy.model.provider}/${strategy.model.model} in=${strategy.tokensIn} out=${strategy.tokensOut} saved=${strategy.savedTokens}]`,
+  );
   audit("heartbeat", "tick", actions.join(","));
   return { survival, actions };
 }
