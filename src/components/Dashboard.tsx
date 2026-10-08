@@ -5,6 +5,14 @@ import { daysLeft, usd } from "@/lib/utils";
 
 type Snapshot = {
   serverNow: string;
+  readiness?: {
+    mocksAllowed: boolean;
+    freellmapi: boolean;
+    email: boolean;
+    payments: boolean;
+    canOutreach: boolean;
+    canInvoice: boolean;
+  };
   epoch: {
     started_at: string;
     ends_at: string;
@@ -170,9 +178,17 @@ export function Dashboard() {
           insomnia_Automaton
         </h1>
         <p className="mt-3 max-w-2xl muted">
-          You approve ideas. The AI negotiates on the buyer&apos;s channel. A deal
-          completes only when money clears.
+          You approve ideas. The AI negotiates on live channels only. A deal
+          completes only when real payment clears. No mock commercial data.
         </p>
+        {data.readiness ? (
+          <p className="mt-3 text-sm mono">
+            REAL_MODE={!data.readiness.mocksAllowed ? "on" : "off"} · SMTP=
+            {data.readiness.email ? "ready" : "missing"} · Stripe=
+            {data.readiness.payments ? "ready" : "missing"} · FreeLLM=
+            {data.readiness.freellmapi ? "ready" : "missing"}
+          </p>
+        ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className={`badge ${survivalClass(data.epoch.survival)}`}>
             {data.epoch.survival}
@@ -399,7 +415,8 @@ export function Dashboard() {
               <li className="muted">No deals yet — approve an idea, then heartbeat.</li>
             ) : (
               data.deals.map((d) => {
-                const invoiceMatch = /invoice (inv_[a-z0-9]+)/i.exec(d.notes);
+                const invoiceMatch =
+                  /invoice ((?:inv_|cs_)[A-Za-z0-9_]+)/.exec(d.notes);
                 const invoiceId = invoiceMatch?.[1];
                 return (
                   <li key={d.id} className="border-t border-[var(--line)] pt-3">
@@ -412,49 +429,9 @@ export function Dashboard() {
                       {d.offered_cents != null ? ` · offer ${usd(d.offered_cents)}` : ""}
                       {d.payment_cleared ? " · PAID" : ""}
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {d.stage === "negotiating" || d.stage === "contacted" ? (
-                        <button
-                          className="btn"
-                          disabled={busy}
-                          onClick={() =>
-                            run("negotiate", async () => {
-                              const res = await fetch("/api/deals", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  action: "negotiate",
-                                  dealId: d.id,
-                                  buyerReply: "Looks interesting — send invoice",
-                                }),
-                              });
-                              const j = await res.json();
-                              if (!res.ok) throw new Error(j.error || "negotiate failed");
-                            })
-                          }
-                        >
-                          Simulate buyer interest
-                        </button>
-                      ) : null}
-                      {d.stage === "awaiting_payment" && invoiceId ? (
-                        <button
-                          className="btn btn-primary"
-                          disabled={busy}
-                          onClick={() =>
-                            run("pay", async () => {
-                              const res = await fetch(
-                                `/api/payments/mock/${invoiceId}`,
-                                { method: "POST" },
-                              );
-                              const j = await res.json();
-                              if (!res.ok) throw new Error(j.error || "pay failed");
-                            })
-                          }
-                        >
-                          Simulate payment clear
-                        </button>
-                      ) : null}
-                    </div>
+                    {invoiceId && d.stage === "awaiting_payment" ? (
+                      <p className="muted mono mt-2">Invoice: {invoiceId}</p>
+                    ) : null}
                   </li>
                 );
               })

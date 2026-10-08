@@ -17,8 +17,10 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.53.0",
     "next": "16.4.0",
+    "nodemailer": "^10.0.16",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "stripe": "^23.0.0",
     "tailwind-merge": "^3.7.0",
     "uuid": "^14.0.2",
     "zod": "^4.6.5"
@@ -27,6 +29,7 @@
     "@tailwindcss/turbopack": "^4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^11.0.0",

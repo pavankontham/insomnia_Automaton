@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getControls } from "@/db/ledger";
 import { audit, getDb } from "@/db/client";
 import { POLICY } from "@/policy/immutable";
+import { emailReady, mocksAllowed } from "@/policy/realmode";
 
 export type Channel =
   | "email"
@@ -46,12 +47,32 @@ function outboundForDeal(dealId: string): number {
   return row.c;
 }
 
-export function sendMessage(opts: {
+async function sendRealEmail(to: string, subject: string, body: string) {
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === "1",
+    auth: {
+      user: process.env.SMTP_USER!,
+      pass: process.env.SMTP_PASS!,
+    },
+  });
+  await transporter.sendMail({
+    from: process.env.OUTREACH_FROM_EMAIL!,
+    to,
+    subject,
+    text: body,
+  });
+}
+
+export async function sendMessage(opts: {
   dealId: string;
   channel: Channel;
   body: string;
-  simulated?: boolean;
-}): { id: string; simulated: boolean } {
+  to?: string | null;
+  subject?: string;
+}): Promise<{ id: string; simulated: boolean }> {
   const controls = getControls();
   if (controls.freeze_outreach || controls.paused) {
     throw new Error("Outreach frozen or system paused");
@@ -62,8 +83,32 @@ export function sendMessage(opts: {
   if (outboundForDeal(opts.dealId) >= POLICY.outreach.maxMessagesPerProspect) {
     throw new Error("Per-prospect message cap reached");
   }
+
+  let simulated = false;
+  if (mocksAllowed()) {
+    simulated = true;
+  } else {
+    if (opts.channel !== "email") {
+      throw new Error(
+        `REAL_MODE: channel ${opts.channel} not wired — only live SMTP email`,
+      );
+    }
+    if (!emailReady()) {
+      throw new Error(
+        "REAL_MODE: set SMTP_HOST, SMTP_USER, SMTP_PASS, OUTREACH_FROM_EMAIL",
+      );
+    }
+    if (!opts.to) {
+      throw new Error("REAL_MODE: prospect email required");
+    }
+    await sendRealEmail(
+      opts.to,
+      opts.subject || "Website demo for your business",
+      opts.body,
+    );
+  }
+
   const id = randomUUID();
-  const simulated = opts.simulated ?? true;
   getDb()
     .prepare(
       `INSERT INTO channel_messages (id, created_at, deal_id, channel, direction, body, simulated)
@@ -94,7 +139,7 @@ export function recordInbound(opts: {
   getDb()
     .prepare(
       `INSERT INTO channel_messages (id, created_at, deal_id, channel, direction, body, simulated)
-       VALUES (?, ?, ?, ?, 'inbound', ?, 1)`,
+       VALUES (?, ?, ?, ?, 'inbound', ?, 0)`,
     )
     .run(
       id,

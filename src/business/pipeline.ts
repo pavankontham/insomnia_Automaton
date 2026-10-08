@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { getDb, audit } from "@/db/client";
-import { localHosting, mockPayments } from "@/adapters/free";
+import {
+  localHosting,
+  payments,
+  markInvoiceCleared,
+  getMockInvoice,
+} from "@/adapters/free";
 import { buildDemoHtml, qaScoreHtml } from "@/business/sites";
 import { pickChannel, sendMessage } from "@/channels";
 import { bumpChildKpi, listChildren } from "@/agents/children";
@@ -8,7 +13,11 @@ import { infer } from "@/inference/router";
 import { rememberBusiness, rememberEpisode, rememberWorking } from "@/memory";
 import { evaluateSurvival } from "@/runtime/survival";
 import { recordClearedPayment } from "@/db/ledger";
-import { markMockInvoiceCleared, getMockInvoice } from "@/adapters/free";
+import {
+  emailReady,
+  mocksAllowed,
+  paymentsReady,
+} from "@/policy/realmode";
 
 export type Prospect = {
   id: string;
@@ -24,6 +33,7 @@ export type Prospect = {
   rating: number;
   score: number;
   notes: string;
+  source: string;
 };
 
 export function listProspects(): Prospect[] {
@@ -166,7 +176,19 @@ export async function advanceDeal(prospectId: string, ideaId?: string) {
   }
   if (demo.qa_score < 70) throw new Error("QA score too low to contact");
 
-  const channel = pickChannel(p.channel_pref);
+  if (!mocksAllowed()) {
+    if (p.source === "seed" || (p.email && p.email.endsWith(".example"))) {
+      throw new Error("REAL_MODE: refuse seed/placeholder prospects");
+    }
+    if (!emailReady()) {
+      throw new Error("REAL_MODE: live SMTP required before outreach");
+    }
+    if (!p.email) {
+      throw new Error("REAL_MODE: prospect email required");
+    }
+  }
+
+  const channel = pickChannel(mocksAllowed() ? p.channel_pref : "email");
   const dealId = randomUUID();
   const now = new Date().toISOString();
   const offer = idea.price_min_cents;
@@ -191,12 +213,13 @@ export async function advanceDeal(prospectId: string, ideaId?: string) {
   const copy = await infer({
     task: "negotiate",
     survival,
-    prompt: `Write a short honest outreach for ${p.name} (${p.category}, ${p.city}). Demo at /api/demos/${demo.slug}. Price band starts $${(offer / 100).toFixed(0)}.`,
+    prompt: `Write a short honest outreach for ${p.name} (${p.category}, ${p.city}). Demo at /api/demos/${demo.slug}. Price band starts $${(offer / 100).toFixed(0)}. Facts only; no invented prices.`,
   });
 
-  sendMessage({
+  await sendMessage({
     dealId,
     channel,
+    to: p.email,
     body: copy.text + `\n\nDemo: /api/demos/${demo.slug}`,
   });
 
@@ -244,9 +267,23 @@ export async function negotiateStep(dealId: string, buyerReply?: string) {
     survival,
     prompt: `Continue negotiation for deal ${dealId}. Offer ${deal.offered_cents} cents. Move to invoice if interested.`,
   });
-  sendMessage({ dealId, channel: deal.channel as "email", body: reply.text });
+  const prospect = getDb()
+    .prepare(`SELECT email FROM prospects WHERE id = ?`)
+    .get(deal.prospect_id) as { email: string | null };
+  await sendMessage({
+    dealId,
+    channel: deal.channel as "email",
+    to: prospect?.email,
+    body: reply.text,
+  });
 
-  const invoice = await mockPayments.createInvoice({
+  if (!mocksAllowed() && !paymentsReady()) {
+    throw new Error(
+      "REAL_MODE: cannot invoice without STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET",
+    );
+  }
+
+  const invoice = await payments.createInvoice({
     dealId,
     amountCents: deal.offered_cents,
     description: `Website package for prospect ${deal.prospect_id}`,
@@ -266,11 +303,14 @@ export async function negotiateStep(dealId: string, buyerReply?: string) {
   return { stage: "awaiting_payment", invoice };
 }
 
-/** Only clears deal when payment adapter reports cleared. */
+/** Only clears deal when payment adapter reports cleared (Stripe webhook or ALLOW_MOCK). */
 export function completeDealOnPayment(invoiceId: string) {
   const inv = getMockInvoice(invoiceId);
   if (!inv) throw new Error("Unknown invoice");
-  markMockInvoiceCleared(invoiceId);
+  if (inv.mock && !mocksAllowed()) {
+    throw new Error("REAL_MODE: refuse mock invoice clear");
+  }
+  markInvoiceCleared(invoiceId);
   recordClearedPayment({
     amountCents: inv.amountCents,
     dealId: inv.dealId,

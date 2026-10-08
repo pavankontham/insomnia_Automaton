@@ -19,9 +19,15 @@ import {
   listProspects,
 } from "@/business/pipeline";
 import { infer, listCatalog } from "@/inference/router";
-import { localCompute, localHosting, mockPayments } from "@/adapters/free";
+import { localCompute, localHosting, payments } from "@/adapters/free";
 import { conwayComputeStub } from "@/adapters/conway-stub";
 import { randomUUID } from "node:crypto";
+import {
+  emailReady,
+  mocksAllowed,
+  paymentsReady,
+  realReadiness,
+} from "@/policy/realmode";
 
 export type CapabilityRow = {
   category: string;
@@ -94,9 +100,21 @@ export function buildCapabilityMap(): CapabilityRow[] {
     },
     {
       category: "Economics",
-      name: "Mock payments",
-      available: true,
-      notes: mockPayments.id,
+      name: "Live payments (Stripe)",
+      available: paymentsReady(),
+      notes: payments.id,
+    },
+    {
+      category: "Human acquisition",
+      name: "Live SMTP email",
+      available: emailReady(),
+      notes: emailReady() ? "SMTP configured" : "needs SMTP_* + OUTREACH_FROM_EMAIL",
+    },
+    {
+      category: "Policy",
+      name: "REAL_MODE (no mock commercial data)",
+      available: !mocksAllowed(),
+      notes: mocksAllowed() ? "ALLOW_MOCK=1" : "enforced",
     },
     {
       category: "Memory",
@@ -106,9 +124,9 @@ export function buildCapabilityMap(): CapabilityRow[] {
     },
     {
       category: "Human acquisition",
-      name: "Multi-channel adapters",
-      available: true,
-      notes: "email/form/sms/whatsapp/linkedin/phone_script",
+      name: "Other channel adapters",
+      available: false,
+      notes: "sms/whatsapp/linkedin/form — not live until credentials",
     },
   ];
   const db = getDb();
@@ -213,14 +231,25 @@ export async function runHeartbeatTick(): Promise<{
     .prepare(`SELECT COUNT(*) as c FROM idea_packs WHERE status = 'pending'`)
     .get() as { c: number };
 
-  // Submit at most one pending idea pack when none approved yet
+  const ready = realReadiness();
+  actions.push(
+    `readiness:email=${ready.email}:pay=${ready.payments}:mock=${ready.mocksAllowed}`,
+  );
+
+  // Idea packs: never auto-approve. Only draft one pending pack for owner review.
   if (!approved && pending.c === 0) {
     const id = await createIdeaPack();
-    actions.push(`idea:${id}`);
+    actions.push(`idea_pending_owner:${id}`);
   }
 
-  if (approved) {
-    const prospects = listProspects().slice(0, 3);
+  if (!approved) {
+    actions.push("waiting_idea_approval");
+  } else if (!mocksAllowed() && (!ready.email || !ready.payments)) {
+    actions.push("blocked_missing_live_smtp_or_stripe");
+  } else if (approved && !controls.freeze_outreach) {
+    const prospects = listProspects()
+      .filter((p) => mocksAllowed() || (p.source !== "seed" && p.email))
+      .slice(0, 3);
     for (const p of prospects) {
       const demo = getDb()
         .prepare(`SELECT id FROM demos WHERE prospect_id = ?`)
@@ -230,23 +259,21 @@ export async function runHeartbeatTick(): Promise<{
         actions.push(`demo:${p.name}`);
       }
     }
-    if (!controls.freeze_outreach) {
-      for (const p of prospects.slice(0, 2)) {
-        const existing = getDb()
-          .prepare(`SELECT id FROM deals WHERE prospect_id = ?`)
-          .get(p.id);
-        if (!existing) {
-          try {
-            const dealId = await advanceDeal(p.id, approved.id);
-            actions.push(`deal:${dealId}`);
-          } catch (e) {
-            actions.push(`deal_skip:${(e as Error).message}`);
-          }
+    for (const p of prospects.slice(0, 2)) {
+      const existing = getDb()
+        .prepare(`SELECT id FROM deals WHERE prospect_id = ?`)
+        .get(p.id);
+      if (!existing) {
+        try {
+          const dealId = await advanceDeal(p.id, approved.id);
+          actions.push(`deal:${dealId}`);
+        } catch (e) {
+          actions.push(`deal_skip:${(e as Error).message}`);
         }
       }
     }
-  } else if (pending.c > 0) {
-    actions.push("waiting_idea_approval");
+  } else if (controls.freeze_outreach) {
+    actions.push("outreach_frozen");
   }
 
   const strategy = await infer({
@@ -311,6 +338,7 @@ export function getDashboardSnapshot() {
   const db = getDb();
   return {
     serverNow: new Date().toISOString(),
+    readiness: realReadiness(),
     epoch: getEpoch(),
     treasury: getTreasury(),
     controls: getControls(),
