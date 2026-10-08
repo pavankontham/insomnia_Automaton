@@ -110,7 +110,7 @@ export async function createIdeaPack() {
     task: "strategy",
     survival,
     prompt:
-      "Propose a local-business website campaign for developed English-speaking markets.",
+      "In ≤80 words: sell polished local-business website demos (sports/salons/clinics/restaurants) in US/UK/CA/AU/NZ/IE. Price $1499–$4999. Honest facts only. Close only on payment. No ads fluff.",
   });
   const id = randomUUID();
   getDb()
@@ -121,14 +121,14 @@ export async function createIdeaPack() {
     .run(
       id,
       new Date().toISOString(),
-      "Local business websites — EN developed markets",
+      "Local business website demos — EN markets",
       "sports / wellness / clinics / salons / restaurants",
       JSON.stringify(["US", "UK", "CA", "AU", "NZ", "IE"]),
-      "Demo site + customization after payment; optional monthly maintenance later",
+      "Demo site now; customize after cleared payment. Stripe later when buyer ready.",
       149900,
       499900,
-      JSON.stringify(["email", "web_form", "linkedin", "sms", "whatsapp"]),
-      strategy.text,
+      JSON.stringify(["email"]),
+      strategy.text.slice(0, 600),
     );
   rememberWorking("idea", `Pending idea pack ${id}`);
   audit("parent", "idea_submitted", id);
@@ -262,10 +262,13 @@ export async function negotiateStep(dealId: string, buyerReply?: string) {
   }
 
   const survival = evaluateSurvival();
+  const canInvoice = paymentsReady() || mocksAllowed();
   const reply = await infer({
     task: "negotiate",
     survival,
-    prompt: `Continue negotiation for deal ${dealId}. Offer ${deal.offered_cents} cents. Move to invoice if interested.`,
+    prompt: canInvoice
+      ? `Continue negotiation for deal ${dealId}. Offer ${deal.offered_cents} cents. Move to invoice if interested. ≤120 words.`
+      : `Continue negotiation for deal ${dealId}. Offer $${(deal.offered_cents / 100).toFixed(0)}. Payment link comes when they confirm buy-in. Push for a clear yes/no. ≤120 words.`,
   });
   const prospect = getDb()
     .prepare(`SELECT email FROM prospects WHERE id = ?`)
@@ -277,10 +280,21 @@ export async function negotiateStep(dealId: string, buyerReply?: string) {
     body: reply.text,
   });
 
-  if (!mocksAllowed() && !paymentsReady()) {
-    throw new Error(
-      "REAL_MODE: cannot invoice without STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET",
-    );
+  const sales = listChildren().find((c) => c.role === "sales" && c.status === "active");
+  if (sales) bumpChildKpi(sales.id, { replies: 1 }, 1);
+
+  // Payment gate deferred until Stripe exists and buyer is ready
+  if (!canInvoice) {
+    getDb()
+      .prepare(
+        `UPDATE deals SET stage = 'negotiating', updated_at = ?, notes = notes || ? WHERE id = ?`,
+      )
+      .run(
+        new Date().toISOString(),
+        " | follow-up sent; invoice deferred until Stripe",
+        dealId,
+      );
+    return { stage: "negotiating", invoice: null, paymentGateDeferred: true };
   }
 
   const invoice = await payments.createInvoice({
@@ -298,8 +312,6 @@ export async function negotiateStep(dealId: string, buyerReply?: string) {
       ` | invoice ${invoice.invoiceId} ${invoice.url}`,
       dealId,
     );
-  const sales = listChildren().find((c) => c.role === "sales" && c.status === "active");
-  if (sales) bumpChildKpi(sales.id, { replies: 1 }, 1);
   return { stage: "awaiting_payment", invoice };
 }
 

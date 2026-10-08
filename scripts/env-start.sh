@@ -9,12 +9,11 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 mkdir -p data/demos data/credentials data/kb
-
-# Rebuild native module defensively after snapshot boots
 pnpm rebuild better-sqlite3 >/dev/null 2>&1 || true
 
-if [ ! -f data/insomnia.db ]; then
-  pnpm db:seed || true
+# Autonomous heartbeat worker (self-prompting loop)
+if ! tmux has-session -t automaton-worker 2>/dev/null; then
+  tmux new-session -d -s automaton-worker "cd /workspace && HEARTBEAT_MS=120000 pnpm worker 2>&1 | tee /tmp/automaton-worker.log"
 fi
 
 # Keep the Next.js owner dashboard in the foreground for start-user observability

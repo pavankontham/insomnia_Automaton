@@ -49,10 +49,16 @@ function outboundForDeal(dealId: string): number {
 
 async function sendRealEmail(to: string, subject: string, body: string) {
   const nodemailer = await import("nodemailer");
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure =
+    process.env.SMTP_SECURE === "1" ||
+    process.env.SMTP_SECURE === "true" ||
+    port === 465;
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST!,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "1",
+    port,
+    secure,
+    requireTLS: !secure && port === 587,
     auth: {
       user: process.env.SMTP_USER!,
       pass: process.env.SMTP_PASS!,

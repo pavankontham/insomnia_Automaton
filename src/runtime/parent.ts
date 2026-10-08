@@ -1,5 +1,5 @@
 import { getDb, audit } from "@/db/client";
-import { getControls, getTreasury } from "@/db/ledger";
+import { getControls, getTreasury, setControls } from "@/db/ledger";
 import {
   formatMemoryForPrompt,
   rememberEpisode,
@@ -18,7 +18,8 @@ import {
   createIdeaPack,
   listProspects,
 } from "@/business/pipeline";
-import { infer, listCatalog } from "@/inference/router";
+import { discoverRealProspects } from "@/business/research";
+import { infer } from "@/inference/router";
 import { localCompute, localHosting, payments } from "@/adapters/free";
 import { conwayComputeStub } from "@/adapters/conway-stub";
 import { randomUUID } from "node:crypto";
@@ -42,7 +43,7 @@ export function buildCapabilityMap(): CapabilityRow[] {
       category: "Reasoning",
       name: "FreeLLMAPI stacked free tiers",
       available: Boolean(process.env.FREELLMAPI_API_KEY),
-      notes: process.env.FREELLMAPI_BASE_URL || "http://127.0.0.1:43128/v1",
+      notes: process.env.FREELLMAPI_BASE_URL || "unset",
     },
     {
       category: "Reasoning",
@@ -102,7 +103,9 @@ export function buildCapabilityMap(): CapabilityRow[] {
       category: "Economics",
       name: "Live payments (Stripe)",
       available: paymentsReady(),
-      notes: payments.id,
+      notes: paymentsReady()
+        ? payments.id
+        : "deferred until buyer ready — demos/sell still run",
     },
     {
       category: "Human acquisition",
@@ -148,6 +151,13 @@ export function buildCapabilityMap(): CapabilityRow[] {
   return rows;
 }
 
+function hoursLeft(epochStarted: string, epochEnds: string): number {
+  return Math.max(
+    0,
+    (new Date(epochEnds).getTime() - Date.now()) / 3600_000,
+  );
+}
+
 export async function runHeartbeatTick(): Promise<{
   survival: string;
   actions: string[];
@@ -164,31 +174,45 @@ export async function runHeartbeatTick(): Promise<{
   evaluateChildren();
   buildCapabilityMap();
 
-  const memory = retrieveWithinBudget(700, "business mission");
-  const kb = kbSearch("mission infra memory children", 500);
+  const epoch = getEpoch();
+  const day =
+    Math.floor(
+      (Date.now() - new Date(epoch.started_at).getTime()) / 86400_000,
+    ) + 1;
+  const hrs = hoursLeft(epoch.started_at, epoch.ends_at);
+  const treasury = getTreasury();
+  const fear =
+    treasury.total_revenue_cents <= 0
+      ? hrs < 48
+        ? "CRITICAL"
+        : hrs < 120
+          ? "HIGH"
+          : "ELEVATED"
+      : "STABLE";
+
   rememberWorking(
     "tick",
-    `Heartbeat survival=${survival} freellmapi=${Boolean(process.env.FREELLMAPI_API_KEY)}`,
+    `Day ${day}/10 survival=${survival} fear=${fear} hrs_left=${hrs.toFixed(0)} revenue=${treasury.total_revenue_cents}`,
   );
 
-  // Ensure specialist children exist (parent decides which)
+  // Auto-unfreeze outreach once live SMTP exists (Stripe optional)
+  const ready = realReadiness();
+  if (controls.freeze_outreach && ready.canOutreach) {
+    setControls({ freeze_outreach: false });
+    actions.push("unfroze_outreach");
+  }
+
+  // Lean specialist set — spawn only what the mission needs now
   const children = listChildren();
-  const needed = [
-    "research",
-    "developer",
-    "sales",
-    "qa",
-    "finance",
-    "optimizer",
-  ] as const;
+  const needed = ["research", "developer", "sales"] as const;
   for (const role of needed) {
     if (!children.some((c) => c.role === role && c.status === "active")) {
       try {
         spawnChild({
           role,
-          objective: `${role} specialist — partitioned context, ROI-gated`,
+          objective: `${role} — survival fear=${fear}; ROI-gated`,
           expectedValueCents: 150000,
-          operatingCostCents: 50,
+          operatingCostCents: 25,
         });
         actions.push(`spawned:${role}`);
       } catch (e) {
@@ -197,33 +221,6 @@ export async function runHeartbeatTick(): Promise<{
     }
   }
 
-  // Optimizer child: token-efficiency pass with tiny partitioned context
-  try {
-    const optCtx = buildChildContext(
-      "optimizer",
-      "List 3 concrete token-saving actions for this tick.",
-    );
-    const opt = await infer({
-      task: "classify",
-      survival,
-      prompt: optCtx,
-    });
-    rememberEpisode(
-      `optimizer: saved~${opt.savedTokens} via ${opt.model.provider}/${opt.model.model} :: ${opt.text.slice(0, 160)}`,
-      0.5,
-    );
-    actions.push(`optimizer:${opt.model.provider}:${opt.savedTokens}tok_saved`);
-  } catch (e) {
-    actions.push(`optimizer_skip:${(e as Error).message}`);
-  }
-
-  // Day-phase heuristics by epoch progress (schedule is guidance; approved ideas unlock sell loop early)
-  const epoch = getEpoch();
-  const day =
-    Math.floor(
-      (Date.now() - new Date(epoch.started_at).getTime()) / 86400_000,
-    ) + 1;
-
   const approved = getDb()
     .prepare(`SELECT id FROM idea_packs WHERE status = 'approved' LIMIT 1`)
     .get() as { id: string } | undefined;
@@ -231,12 +228,10 @@ export async function runHeartbeatTick(): Promise<{
     .prepare(`SELECT COUNT(*) as c FROM idea_packs WHERE status = 'pending'`)
     .get() as { c: number };
 
-  const ready = realReadiness();
   actions.push(
-    `readiness:email=${ready.email}:pay=${ready.payments}:mock=${ready.mocksAllowed}`,
+    `readiness:email=${ready.email}:pay=${ready.payments}:fear=${fear}`,
   );
 
-  // Idea packs: never auto-approve. Only draft one pending pack for owner review.
   if (!approved && pending.c === 0) {
     const id = await createIdeaPack();
     actions.push(`idea_pending_owner:${id}`);
@@ -244,22 +239,67 @@ export async function runHeartbeatTick(): Promise<{
 
   if (!approved) {
     actions.push("waiting_idea_approval");
-  } else if (!mocksAllowed() && (!ready.email || !ready.payments)) {
-    actions.push("blocked_missing_live_smtp_or_stripe");
-  } else if (approved && !controls.freeze_outreach) {
-    const prospects = listProspects()
-      .filter((p) => mocksAllowed() || (p.source !== "seed" && p.email))
-      .slice(0, 3);
-    for (const p of prospects) {
-      const demo = getDb()
-        .prepare(`SELECT id FROM demos WHERE prospect_id = ?`)
-        .get(p.id);
-      if (!demo) {
+    // One cheap CEO nudge only — do not burn tokens while blocked
+    writeCeoReport(
+      day,
+      survival,
+      actions,
+      `SURVIVAL FEAR=${fear}. ${hrs.toFixed(0)}h left. Owner must approve the pending idea pack — no outreach until then.`,
+    );
+    audit("heartbeat", "tick", actions.join(","));
+    return { survival, actions };
+  }
+
+  if (!ready.email && !mocksAllowed()) {
+    actions.push("blocked_missing_smtp");
+    writeCeoReport(
+      day,
+      survival,
+      actions,
+      `SURVIVAL FEAR=${fear}. SMTP missing — cannot sell.`,
+    );
+    audit("heartbeat", "tick", actions.join(","));
+    return { survival, actions };
+  }
+
+  // Research real prospects when pipeline is thin
+  const prospectCount = (
+    getDb().prepare(`SELECT COUNT(*) as c FROM prospects`).get() as { c: number }
+  ).c;
+  if (prospectCount < 5) {
+    try {
+      const ids = await discoverRealProspects(2);
+      if (ids.length) actions.push(`researched:${ids.length}`);
+      else actions.push("research_empty");
+    } catch (e) {
+      actions.push(`research_skip:${(e as Error).message}`);
+    }
+  }
+
+  const prospects = listProspects()
+    .filter((p) => mocksAllowed() || p.source !== "seed")
+    .slice(0, 6);
+
+  // Build demos for prospects (email optional at build time)
+  for (const p of prospects.slice(0, 3)) {
+    const demo = getDb()
+      .prepare(`SELECT id FROM demos WHERE prospect_id = ?`)
+      .get(p.id);
+    if (!demo) {
+      try {
         await buildDemoForProspect(p.id);
         actions.push(`demo:${p.name}`);
+      } catch (e) {
+        actions.push(`demo_skip:${(e as Error).message}`);
       }
     }
-    for (const p of prospects.slice(0, 2)) {
+  }
+
+  // Outreach only when email present + outreach not frozen
+  const liveControls = getControls();
+  if (!liveControls.freeze_outreach) {
+    const withEmail = prospects.filter((p) => Boolean(p.email)).slice(0, 2);
+    for (const p of withEmail) {
       const existing = getDb()
         .prepare(`SELECT id FROM deals WHERE prospect_id = ?`)
         .get(p.id);
@@ -272,39 +312,56 @@ export async function runHeartbeatTick(): Promise<{
         }
       }
     }
-  } else if (controls.freeze_outreach) {
+  } else {
     actions.push("outreach_frozen");
   }
 
+  // Token-thrifty strategy: only when there is work signal
+  const memory = retrieveWithinBudget(400, "sell demos survive");
+  const kb = kbSearch("mission sell demo", 300);
   const strategy = await infer({
     task: "strategy",
     survival,
     prompt: [
-      "You are insomnia_Automaton parent CEO.",
-      "Stable prefix: create genuine value; close only on cleared payment; never touch owner treasury.",
-      // Progressive disclosure: skill names only, not full bodies every turn
-      activeSkillPrompt().slice(0, 1800),
+      "You are insomnia_Automaton parent CEO. Autonomous. Self-prompt. Act.",
+      "Laws: genuine value; no mock clients; close only on real payment; never touch owner treasury.",
+      `SURVIVAL FEAR=${fear}. Day ${day}/10. ~${hrs.toFixed(0)} hours left. Revenue $${(treasury.total_revenue_cents / 100).toFixed(0)}.`,
+      "Stripe deferred until a real buyer is ready — keep building demos and selling via email.",
+      activeSkillPrompt().slice(0, 800),
       kb,
       formatMemoryForPrompt(memory),
-      `Day ${day}/10 survival=${survival}`,
-      `Treasury AI=${getTreasury().ai_cents}c Owner=${getTreasury().owner_cents}c`,
-      `Route catalog: ${JSON.stringify(listCatalog().strategy.map((m) => m.provider + "/" + m.model))}`,
-      "Propose next high-ROI action under constitution. Be brief.",
-    ].join("\n\n"),
+      `Actions this tick: ${actions.join(", ")}`,
+      "Reply ≤60 words: next concrete action + why it raises survival odds.",
+    ].join("\n"),
   });
   rememberEpisode(
-    `CEO (${strategy.model.provider}/${strategy.model.model} saved=${strategy.savedTokens}): ${strategy.text.slice(0, 200)}`,
-    0.4,
+    `CEO fear=${fear} (${strategy.model.provider}): ${strategy.text.slice(0, 160)}`,
+    0.5,
   );
-  actions.push(
-    `strategy_infer:${strategy.model.provider}:saved${strategy.savedTokens}`,
-  );
+  actions.push(`strategy:${strategy.model.provider}:saved${strategy.savedTokens}`);
+
+  // Occasional optimizer only under token pressure / low fear waste
+  if (fear === "CRITICAL" || day % 2 === 0) {
+    try {
+      const opt = await infer({
+        task: "classify",
+        survival,
+        prompt: buildChildContext(
+          "optimizer",
+          "One token-saving cut for this mission. ≤20 words.",
+        ),
+      });
+      actions.push(`opt:saved${opt.savedTokens}`);
+    } catch {
+      /* ignore */
+    }
+  }
 
   writeCeoReport(
     day,
     survival,
     actions,
-    `${strategy.text}\n\n[via ${strategy.model.provider}/${strategy.model.model} in=${strategy.tokensIn} out=${strategy.tokensOut} saved=${strategy.savedTokens}]`,
+    `FEAR=${fear} ${hrs.toFixed(0)}h left\n${strategy.text}\n[via ${strategy.model.provider} saved=${strategy.savedTokens}]`,
   );
   audit("heartbeat", "tick", actions.join(","));
   return { survival, actions };

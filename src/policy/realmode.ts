@@ -1,5 +1,6 @@
 /**
- * Hard real-mode gate. Mock / seed / simulated commercial activity is forbidden.
+ * Hard real-mode gate. Mock / seed / synthetic commercial activity is forbidden.
+ * Stripe is optional until a buyer is ready to pay.
  */
 
 export function mocksAllowed(): boolean {
@@ -9,7 +10,7 @@ export function mocksAllowed(): boolean {
 export function requireReal(action: string): void {
   if (mocksAllowed()) return;
   throw new Error(
-    `REAL_MODE: ${action} blocked. Mock/synthetic commercial data is disabled. Provide real credentials and real prospects.`,
+    `REAL_MODE: ${action} blocked. Mock/synthetic commercial data is disabled.`,
   );
 }
 
@@ -31,12 +32,16 @@ export function emailReady(): boolean {
 }
 
 export function realReadiness() {
+  const email = emailReady();
+  const payments = paymentsReady();
   return {
     mocksAllowed: mocksAllowed(),
     freellmapi: Boolean(process.env.FREELLMAPI_API_KEY),
-    email: emailReady(),
-    payments: paymentsReady(),
-    canOutreach: emailReady() && !mocksAllowed(),
-    canInvoice: paymentsReady() && !mocksAllowed(),
+    email,
+    payments,
+    /** Sell loop: demos + outreach. Stripe not required yet. */
+    canOutreach: email && !mocksAllowed(),
+    canInvoice: payments && !mocksAllowed(),
+    paymentGateDeferred: !payments,
   };
 }
