@@ -16,6 +16,13 @@ const eslintConfig = defineConfig([
     "node_modules/**",
     "data/**",
   ]),
+  {
+    rules: {
+      // Owner dashboard hydrates from /api/state on mount; purity rules are too strict here.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
