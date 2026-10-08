@@ -118,21 +118,38 @@ function survivalClass(s: string) {
   return "badge-boot";
 }
 
-export function Dashboard() {
-  const [data, setData] = useState<Snapshot | null>(null);
+export function Dashboard({ initialData }: { initialData?: Snapshot }) {
+  const [data, setData] = useState<Snapshot | null>(initialData ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string>("");
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/state", { cache: "no-store" });
-    if (!res.ok) throw new Error("Failed to load state");
-    setData(await res.json());
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12_000);
+    try {
+      const res = await fetch("/api/state", {
+        cache: "no-store",
+        signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error(`Failed to load state (${res.status})`);
+      setData(await res.json());
+      setError(null);
+    } finally {
+      clearTimeout(t);
+    }
   }, []);
 
   useEffect(() => {
-    refresh().catch((e) => setError((e as Error).message));
-  }, [refresh]);
+    // Refresh in background; SSR already painted initialData
+    refresh().catch((e) => {
+      if (!initialData) setError((e as Error).message);
+    });
+    const id = setInterval(() => {
+      refresh().catch(() => undefined);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [refresh, initialData]);
 
   const day = useMemo(() => {
     if (!data) return 0;
@@ -158,7 +175,20 @@ export function Dashboard() {
   if (!data) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-16">
-        <p className="muted">{error ? `Error: ${error}` : "Booting insomnia_Automaton…"}</p>
+        <p className="muted">
+          {error
+            ? `Error: ${error}`
+            : "Loading owner dashboard… if this sticks, hard-refresh once."}
+        </p>
+        <button
+          className="btn btn-primary mt-4"
+          type="button"
+          onClick={() =>
+            refresh().catch((e) => setError((e as Error).message))
+          }
+        >
+          Retry
+        </button>
       </main>
     );
   }
