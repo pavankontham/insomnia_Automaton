@@ -9,7 +9,7 @@ import {
 } from "@/memory";
 import { kbSearch, seedProjectKb } from "@/memory/project-kb";
 import { activeSkillPrompt, syncSkillsToDb } from "@/skills/loader";
-import { evaluateSurvival, getEpoch, shutdownIfRed } from "@/runtime/survival";
+import { getEpoch, shutdownIfRed } from "@/runtime/survival";
 import { evaluateChildren, listChildren, spawnChild } from "@/agents/children";
 import { buildChildContext } from "@/agents/context";
 import {
@@ -310,6 +310,7 @@ function writeCeoReport(
 export function getDashboardSnapshot() {
   const db = getDb();
   return {
+    serverNow: new Date().toISOString(),
     epoch: getEpoch(),
     treasury: getTreasury(),
     controls: getControls(),

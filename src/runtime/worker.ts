@@ -10,8 +10,7 @@ const INTERVAL_MS = Number(process.env.HEARTBEAT_MS ?? 60_000);
 async function main() {
   ensureSeeded();
   console.log(`insomnia_Automaton worker — heartbeat every ${INTERVAL_MS}ms`);
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     try {
       const result = await runHeartbeatTick();
       console.log(new Date().toISOString(), result.survival, result.actions.join(","));

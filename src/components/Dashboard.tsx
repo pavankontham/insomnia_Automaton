@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { daysLeft, usd } from "@/lib/utils";
 
 type Snapshot = {
+  serverNow: string;
   epoch: {
     started_at: string;
     ends_at: string;
@@ -128,7 +129,8 @@ export function Dashboard() {
   const day = useMemo(() => {
     if (!data) return 0;
     const start = new Date(data.epoch.started_at).getTime();
-    return Math.floor((Date.now() - start) / 86400_000) + 1;
+    const now = new Date(data.serverNow || data.epoch.started_at).getTime();
+    return Math.floor((now - start) / 86400_000) + 1;
   }, [data]);
 
   async function run(label: string, fn: () => Promise<void>) {
