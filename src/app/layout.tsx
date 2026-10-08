@@ -18,7 +18,11 @@ export const metadata: Metadata = {
     "Zero-cost 10-day autonomous micro-business experiment — owner approves ideas; AI negotiates; deals close on payment.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"
