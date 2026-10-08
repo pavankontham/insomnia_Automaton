@@ -34,6 +34,8 @@ export type Prospect = {
   score: number;
   notes: string;
   source: string;
+  address?: string | null;
+  dossier_json?: string;
 };
 
 export function listProspects(): Prospect[] {
@@ -59,6 +61,13 @@ export async function buildDemoForProspect(prospectId: string) {
     .prepare(`SELECT * FROM prospects WHERE id = ?`)
     .get(prospectId) as Prospect;
   if (!p) throw new Error("Prospect not found");
+  let dossier = null;
+  try {
+    dossier = p.dossier_json ? JSON.parse(p.dossier_json) : null;
+    if (dossier && Object.keys(dossier).length === 0) dossier = null;
+  } catch {
+    dossier = null;
+  }
   const html = await buildDemoHtml({
     name: p.name,
     category: p.category,
@@ -68,6 +77,7 @@ export async function buildDemoForProspect(prospectId: string) {
     email: p.email,
     note: p.notes,
     website: p.website,
+    dossier,
   });
   const qa = qaScoreHtml(html, p);
   const slug = p.name
@@ -83,7 +93,7 @@ export async function buildDemoForProspect(prospectId: string) {
   if (existing) {
     getDb()
       .prepare(
-        `UPDATE demos SET slug = ?, path = ?, qa_score = ?, qa_notes = ?, status = ?, created_at = ? WHERE id = ?`,
+        `UPDATE demos SET slug = ?, path = ?, qa_score = ?, qa_notes = ?, status = ?, created_at = ?, pitch_approved = 0 WHERE id = ?`,
       )
       .run(
         slug,
@@ -97,8 +107,8 @@ export async function buildDemoForProspect(prospectId: string) {
   } else {
     getDb()
       .prepare(
-        `INSERT INTO demos (id, created_at, prospect_id, slug, path, qa_score, qa_notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO demos (id, created_at, prospect_id, slug, path, qa_score, qa_notes, status, pitch_approved)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(
         id,
@@ -189,12 +199,27 @@ export async function advanceDeal(prospectId: string, ideaId?: string) {
     .get(prospectId) as Prospect;
   let demo = getDb()
     .prepare(`SELECT * FROM demos WHERE prospect_id = ? ORDER BY created_at DESC LIMIT 1`)
-    .get(prospectId) as { id: string; slug: string; qa_score: number } | undefined;
+    .get(prospectId) as {
+    id: string;
+    slug: string;
+    qa_score: number;
+    pitch_approved: number;
+  } | undefined;
   if (!demo) {
     const built = await buildDemoForProspect(prospectId);
-    demo = { id: built.id, slug: built.slug, qa_score: built.qa.score };
+    demo = {
+      id: built.id,
+      slug: built.slug,
+      qa_score: built.qa.score,
+      pitch_approved: 0,
+    };
   }
   if (demo.qa_score < 85) throw new Error("QA score too low to pitch — rebuild demo");
+  if (!demo.pitch_approved) {
+    throw new Error(
+      "Owner has not approved pitching this demo — review the demo, then approve pitch",
+    );
+  }
 
   if (!mocksAllowed()) {
     if (p.source === "seed" || (p.email && p.email.endsWith(".example"))) {

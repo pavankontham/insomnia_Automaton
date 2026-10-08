@@ -1,5 +1,10 @@
 import { infer } from "@/inference/router";
 import { evaluateSurvival } from "@/runtime/survival";
+import {
+  RESEARCHED_DOSSIERS,
+  type ProspectDossier,
+} from "@/business/dossier";
+import { buildPersonalInteractiveHtml } from "@/business/personalSites";
 
 export type SiteFacts = {
   name: string;
@@ -12,16 +17,25 @@ export type SiteFacts = {
   services?: string[];
   note?: string;
   website?: string | null;
+  dossier?: ProspectDossier | null;
 };
 
-/** Premium demo via FreeLLMAPI (auto:smart). Falls back to craftsmanship template. */
+/** Prefer researched personal interactive demo; else FreeLLMAPI; else craftsmanship. */
 export async function buildDemoHtml(facts: SiteFacts): Promise<string> {
+  const dossier =
+    facts.dossier ||
+    RESEARCHED_DOSSIERS[facts.name] ||
+    null;
+  if (dossier) {
+    const personal = buildPersonalInteractiveHtml(facts, dossier);
+    if (qaScoreHtml(personal, facts).score >= 85) return personal;
+  }
   const survival = evaluateSurvival();
   try {
     const result = await infer({
       task: "code",
       survival,
-      prompt: sitePrompt(facts),
+      prompt: sitePrompt(facts, dossier),
     });
     const html = extractHtml(result.text);
     if (html && qaScoreHtml(html, facts).score >= 80) {
@@ -33,37 +47,33 @@ export async function buildDemoHtml(facts: SiteFacts): Promise<string> {
   return craftsmanshipTemplate(facts);
 }
 
-function sitePrompt(facts: SiteFacts): string {
-  const services = (facts.services?.length
-    ? facts.services
-    : defaultServices(facts.category)
+function sitePrompt(facts: SiteFacts, dossier: ProspectDossier | null): string {
+  const services = (
+    dossier?.services?.length
+      ? dossier.services
+      : facts.services?.length
+        ? facts.services
+        : defaultServices(facts.category)
   ).join(", ");
   return `You are an elite conversion web designer. Output ONE complete HTML5 file only (no markdown fences).
 
-Business (facts only — never invent prices, reviews, awards, or addresses):
+Business (facts only — never invent prices/reviews/awards/addresses beyond the dossier):
 - Name: ${facts.name}
 - Category: ${facts.category}
 - City/Country: ${facts.city}, ${facts.country}
-- Phone: ${facts.phone || "omit tel link if unknown"}
-- Email: ${facts.email || "omit mailto if unknown"}
-- Hours: ${facts.hours || "Ask us for current hours"}
+- Phone: ${dossier?.phone || facts.phone || "omit if unknown"}
+- Email: ${dossier?.email || facts.email || "omit if unknown"}
+- Address: ${dossier?.address || dossier?.addresses?.map((a) => a.line).join(" | ") || "city-level only"}
+- Hours: ${dossier?.hours || facts.hours || "Ask us for current hours"}
 - Services: ${services}
-- Notes: ${facts.note || "none"}
+- About: ${dossier?.about || facts.note || "none"}
+- Tagline: ${dossier?.tagline || ""}
 - Existing site: ${facts.website || "none / weak"}
 
-Design requirements (must all be present):
-1. Single-file HTML with embedded CSS + minimal JS. No external images except fonts.cdn.
-2. Google Fonts: pick an expressive DISPLAY + body pair. FORBIDDEN: Inter, Roboto, Arial, system-ui as hero fonts.
-3. Full-bleed hero (edge-to-edge). Brand name is the hero-level signal — larger than any headline.
-4. First viewport ONLY: brand, one headline, one short sentence, one CTA group, dominant atmospheric background (CSS gradients/patterns/SVG — not a flat color).
-5. NO cards in the hero. NO floating badges/stickers/stat strips/pill clusters.
-6. Sections after hero: Services, Visit/Hours, Contact — one job each.
-7. 2–3 intentional CSS motions (fade/rise/soft parallax feel). Subtle, not noisy.
-8. Niche visual direction (NOT generic purple, NOT cream+terracotta newspaper). Example: tennis=clay court + night green; dental=clean clinical light + deep teal; physio=warm stone + charcoal.
-9. Sticky thin demo strip: "Demo by insomnia_Automaton — facts only; no invented pricing."
-10. Mobile-first, accessible contrast, working tel:/mailto: when known.
-11. Self-contained — must look pitch-ready to a paying owner.
-
+Must feel personally made for THIS business — use the real names/places/services above.
+Interactive single-file: sticky nav, service filter chips, enquiry form with JS validation + mailto, FAQ accordion, gallery using Unsplash atmosphere images (label as atmosphere not their photos), map link, sticky call CTA.
+Brand-first full-bleed hero photo+veil. Expressive Google Fonts (no Inter/Roboto/Arial). Motions. Mobile-first.
+Sticky banner: personal demo by insomnia_Automaton — public facts only.
 Return raw HTML starting with <!DOCTYPE html>.`;
 }
 

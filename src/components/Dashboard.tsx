@@ -70,6 +70,7 @@ type Snapshot = {
     prospect_name: string;
     qa_score: number;
     status: string;
+    pitch_approved?: number;
   }>;
   deals: Array<{
     id: string;
@@ -524,21 +525,78 @@ export function Dashboard({ initialData }: { initialData?: Snapshot }) {
 
         <section className="panel p-5">
           <h2 className="mb-3 text-lg" style={{ fontFamily: "var(--font-display)" }}>
-            Demos
+            Demos (review before any email)
           </h2>
-          <ul className="space-y-2 text-sm">
+          <p className="muted text-sm mb-2">
+            No outreach until you approve a pitch. Rebuilds reset approval.
+          </p>
+          <ul className="space-y-3 text-sm">
             {data.demos.length === 0 ? (
               <li className="muted">No demos yet.</li>
             ) : (
               data.demos.map((d) => (
-                <li key={d.id} className="border-t border-[var(--line)] pt-2">
-                  <a className="underline decoration-[var(--moss)]" href={`/api/demos/${d.slug}`} target="_blank" rel="noreferrer">
-                    {d.prospect_name}
-                  </a>
-                  <span className="muted mono">
-                    {" "}
-                    · QA {d.qa_score} · {d.status}
-                  </span>
+                <li key={d.id} className="border-t border-[var(--line)] pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <a
+                      className="underline decoration-[var(--moss)] font-medium"
+                      href={`/api/demos/${d.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {d.prospect_name}
+                    </a>
+                    <span className="badge">
+                      {d.pitch_approved ? "pitch OK" : "awaiting you"}
+                    </span>
+                  </div>
+                  <p className="muted mono mt-1">
+                    QA {d.qa_score} · {d.status}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {!d.pitch_approved ? (
+                      <button
+                        className="btn btn-primary"
+                        disabled={busy || d.qa_score < 85}
+                        onClick={() =>
+                          run("pitch", async () => {
+                            const res = await fetch("/api/demos/pitch", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                demoId: d.id,
+                                approve: true,
+                              }),
+                            });
+                            const j = await res.json();
+                            if (!res.ok) throw new Error(j.error || "pitch failed");
+                          })
+                        }
+                      >
+                        Approve email pitch
+                      </button>
+                    ) : (
+                      <button
+                        className="btn"
+                        disabled={busy}
+                        onClick={() =>
+                          run("revoke", async () => {
+                            const res = await fetch("/api/demos/pitch", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                demoId: d.id,
+                                approve: false,
+                              }),
+                            });
+                            const j = await res.json();
+                            if (!res.ok) throw new Error(j.error || "revoke failed");
+                          })
+                        }
+                      >
+                        Revoke pitch
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))
             )}

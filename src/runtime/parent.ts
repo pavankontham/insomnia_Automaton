@@ -1,5 +1,5 @@
 import { getDb, audit } from "@/db/client";
-import { getControls, getTreasury, setControls } from "@/db/ledger";
+import { getControls, getTreasury } from "@/db/ledger";
 import {
   formatMemoryForPrompt,
   rememberEpisode,
@@ -13,7 +13,6 @@ import { getEpoch, shutdownIfRed } from "@/runtime/survival";
 import { evaluateChildren, listChildren, spawnChild } from "@/agents/children";
 import { buildChildContext } from "@/agents/context";
 import {
-  advanceDeal,
   buildDemoForProspect,
   createIdeaPack,
   listProspects,
@@ -29,6 +28,7 @@ import {
   paymentsReady,
   realReadiness,
 } from "@/policy/realmode";
+// advanceDeal is owner-triggered only (pitch permission required)
 
 export type CapabilityRow = {
   category: string;
@@ -195,11 +195,12 @@ export async function runHeartbeatTick(): Promise<{
     `Day ${day}/10 survival=${survival} fear=${fear} hrs_left=${hrs.toFixed(0)} revenue=${treasury.total_revenue_cents}`,
   );
 
-  // Auto-unfreeze outreach once live SMTP exists (Stripe optional)
+  // Outreach stays frozen until owner explicitly unfreezes AND approves each pitch
   const ready = realReadiness();
-  if (controls.freeze_outreach && ready.canOutreach) {
-    setControls({ freeze_outreach: false });
-    actions.push("unfroze_outreach");
+  if (!controls.freeze_outreach) {
+    // keep owner choice; do not auto-unfreeze
+  } else {
+    actions.push("outreach_frozen_awaiting_owner");
   }
 
   // Lean specialist set — spawn only what the mission needs now
@@ -295,25 +296,22 @@ export async function runHeartbeatTick(): Promise<{
     }
   }
 
-  // Outreach only when email present + outreach not frozen
+  // Never auto-email. Owner must: unfreeze outreach + approve pitch per demo.
   const liveControls = getControls();
-  if (!liveControls.freeze_outreach) {
-    const withEmail = prospects.filter((p) => Boolean(p.email)).slice(0, 2);
-    for (const p of withEmail) {
-      const existing = getDb()
-        .prepare(`SELECT id FROM deals WHERE prospect_id = ?`)
-        .get(p.id);
-      if (!existing) {
-        try {
-          const dealId = await advanceDeal(p.id, approved.id);
-          actions.push(`deal:${dealId}`);
-        } catch (e) {
-          actions.push(`deal_skip:${(e as Error).message}`);
-        }
-      }
-    }
+  const pitchReady = getDb()
+    .prepare(
+      `SELECT d.id, p.name FROM demos d JOIN prospects p ON p.id = d.prospect_id
+       WHERE d.pitch_approved = 1 AND d.qa_score >= 85 AND p.email IS NOT NULL AND p.email != ''`,
+    )
+    .all() as { id: string; name: string }[];
+  if (liveControls.freeze_outreach) {
+    actions.push(`demos_ready_awaiting_pitch_permission:${pitchReady.length}`);
+  } else if (pitchReady.length === 0) {
+    actions.push("no_pitch_approved_demos");
   } else {
-    actions.push("outreach_frozen");
+    actions.push(
+      `pitch_approved_waiting_manual_send:${pitchReady.map((x) => x.name).join("|")}`,
+    );
   }
 
   // Token-thrifty strategy: only when there is work signal

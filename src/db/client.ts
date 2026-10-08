@@ -55,6 +55,31 @@ function bootstrap(database: Database.Database) {
       )
       .run(randomUUID(), started.toISOString(), ends.toISOString());
   }
+  migrateColumns(database);
+}
+
+function migrateColumns(database: Database.Database) {
+  const prospectCols = database
+    .prepare(`PRAGMA table_info(prospects)`)
+    .all() as { name: string }[];
+  const pnames = new Set(prospectCols.map((c) => c.name));
+  if (!pnames.has("dossier_json")) {
+    database.exec(
+      `ALTER TABLE prospects ADD COLUMN dossier_json TEXT NOT NULL DEFAULT '{}'`,
+    );
+  }
+  if (!pnames.has("address")) {
+    database.exec(`ALTER TABLE prospects ADD COLUMN address TEXT`);
+  }
+  const demoCols = database
+    .prepare(`PRAGMA table_info(demos)`)
+    .all() as { name: string }[];
+  const dnames = new Set(demoCols.map((c) => c.name));
+  if (!dnames.has("pitch_approved")) {
+    database.exec(
+      `ALTER TABLE demos ADD COLUMN pitch_approved INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
 }
 
 export function audit(actor: string, action: string, detail: string) {

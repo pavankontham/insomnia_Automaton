@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS prospects (
   rating REAL NOT NULL DEFAULT 0,
   score REAL NOT NULL DEFAULT 0,
   notes TEXT NOT NULL DEFAULT '',
-  source TEXT NOT NULL DEFAULT 'seed'
+  source TEXT NOT NULL DEFAULT 'seed',
+  address TEXT,
+  dossier_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS demos (
@@ -97,6 +99,7 @@ CREATE TABLE IF NOT EXISTS demos (
   qa_score REAL NOT NULL DEFAULT 0,
   qa_notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft',
+  pitch_approved INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (prospect_id) REFERENCES prospects(id)
 );
 
