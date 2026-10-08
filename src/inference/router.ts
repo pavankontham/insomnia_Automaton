@@ -73,8 +73,10 @@ export function routeModel(
   survival: SurvivalState,
 ): ModelChoice {
   const options = CATALOG[task].filter((m) => hasProvider(m.provider));
+  // Demos (`code`) always take the smartest free model — pitch quality is survival.
   const preferCheap =
-    survival === "YELLOW" || survival === "RED" || survival === "BOOT";
+    task !== "code" &&
+    (survival === "YELLOW" || survival === "RED" || survival === "BOOT");
   const sorted = [...options].sort((a, b) =>
     preferCheap
       ? a.costCentsPerCall - b.costCentsPerCall || b.quality - a.quality

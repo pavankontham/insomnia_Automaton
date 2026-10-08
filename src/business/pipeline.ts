@@ -59,7 +59,7 @@ export async function buildDemoForProspect(prospectId: string) {
     .prepare(`SELECT * FROM prospects WHERE id = ?`)
     .get(prospectId) as Prospect;
   if (!p) throw new Error("Prospect not found");
-  const html = buildDemoHtml({
+  const html = await buildDemoHtml({
     name: p.name,
     category: p.category,
     city: p.city,
@@ -67,6 +67,7 @@ export async function buildDemoForProspect(prospectId: string) {
     phone: p.phone,
     email: p.email,
     note: p.notes,
+    website: p.website,
   });
   const qa = qaScoreHtml(html, p);
   const slug = p.name
@@ -75,22 +76,41 @@ export async function buildDemoForProspect(prospectId: string) {
     .replace(/(^-|-$)/g, "")
     .slice(0, 48);
   const published = await localHosting.publishDemo(slug, html);
-  const id = randomUUID();
-  getDb()
-    .prepare(
-      `INSERT INTO demos (id, created_at, prospect_id, slug, path, qa_score, qa_notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      id,
-      new Date().toISOString(),
-      p.id,
-      slug,
-      published.path,
-      qa.score,
-      qa.notes,
-      qa.score >= 70 ? "ready" : "needs_fix",
-    );
+  const existing = getDb()
+    .prepare(`SELECT id FROM demos WHERE prospect_id = ? ORDER BY created_at DESC LIMIT 1`)
+    .get(p.id) as { id: string } | undefined;
+  const id = existing?.id ?? randomUUID();
+  if (existing) {
+    getDb()
+      .prepare(
+        `UPDATE demos SET slug = ?, path = ?, qa_score = ?, qa_notes = ?, status = ?, created_at = ? WHERE id = ?`,
+      )
+      .run(
+        slug,
+        published.path,
+        qa.score,
+        qa.notes,
+        qa.score >= 85 ? "ready" : "needs_fix",
+        new Date().toISOString(),
+        id,
+      );
+  } else {
+    getDb()
+      .prepare(
+        `INSERT INTO demos (id, created_at, prospect_id, slug, path, qa_score, qa_notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        new Date().toISOString(),
+        p.id,
+        slug,
+        published.path,
+        qa.score,
+        qa.notes,
+        qa.score >= 85 ? "ready" : "needs_fix",
+      );
+  }
   const salesChild = listChildren().find(
     (c) => c.role === "developer" && c.status === "active",
   );
@@ -100,7 +120,7 @@ export async function buildDemoForProspect(prospectId: string) {
     slug,
   });
   rememberBusiness(p.name, `demo:${published.url}`);
-  audit("developer", "demo_built", `${p.name} ${slug}`);
+  audit("developer", "demo_built", `${p.name} ${slug} qa=${qa.score}`);
   return { id, slug, url: published.url, qa };
 }
 
@@ -174,7 +194,7 @@ export async function advanceDeal(prospectId: string, ideaId?: string) {
     const built = await buildDemoForProspect(prospectId);
     demo = { id: built.id, slug: built.slug, qa_score: built.qa.score };
   }
-  if (demo.qa_score < 70) throw new Error("QA score too low to contact");
+  if (demo.qa_score < 85) throw new Error("QA score too low to pitch — rebuild demo");
 
   if (!mocksAllowed()) {
     if (p.source === "seed" || (p.email && p.email.endsWith(".example"))) {

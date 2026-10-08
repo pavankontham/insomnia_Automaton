@@ -1,3 +1,6 @@
+import { infer } from "@/inference/router";
+import { evaluateSurvival } from "@/runtime/survival";
+
 export type SiteFacts = {
   name: string;
   category: string;
@@ -8,76 +11,312 @@ export type SiteFacts = {
   hours?: string | null;
   services?: string[];
   note?: string;
+  website?: string | null;
 };
 
-export function buildDemoHtml(facts: SiteFacts): string {
-  const services =
-    facts.services?.length
-      ? facts.services
-      : defaultServices(facts.category);
-  const phone = facts.phone || "Contact for number";
-  const email = facts.email || "Contact via form";
-  const hours = facts.hours || "Contact us for current hours";
+/** Premium demo via FreeLLMAPI (auto:smart). Falls back to craftsmanship template. */
+export async function buildDemoHtml(facts: SiteFacts): Promise<string> {
+  const survival = evaluateSurvival();
+  try {
+    const result = await infer({
+      task: "code",
+      survival,
+      prompt: sitePrompt(facts),
+    });
+    const html = extractHtml(result.text);
+    if (html && qaScoreHtml(html, facts).score >= 80) {
+      return html;
+    }
+  } catch {
+    /* fall through */
+  }
+  return craftsmanshipTemplate(facts);
+}
+
+function sitePrompt(facts: SiteFacts): string {
+  const services = (facts.services?.length
+    ? facts.services
+    : defaultServices(facts.category)
+  ).join(", ");
+  return `You are an elite conversion web designer. Output ONE complete HTML5 file only (no markdown fences).
+
+Business (facts only — never invent prices, reviews, awards, or addresses):
+- Name: ${facts.name}
+- Category: ${facts.category}
+- City/Country: ${facts.city}, ${facts.country}
+- Phone: ${facts.phone || "omit tel link if unknown"}
+- Email: ${facts.email || "omit mailto if unknown"}
+- Hours: ${facts.hours || "Ask us for current hours"}
+- Services: ${services}
+- Notes: ${facts.note || "none"}
+- Existing site: ${facts.website || "none / weak"}
+
+Design requirements (must all be present):
+1. Single-file HTML with embedded CSS + minimal JS. No external images except fonts.cdn.
+2. Google Fonts: pick an expressive DISPLAY + body pair. FORBIDDEN: Inter, Roboto, Arial, system-ui as hero fonts.
+3. Full-bleed hero (edge-to-edge). Brand name is the hero-level signal — larger than any headline.
+4. First viewport ONLY: brand, one headline, one short sentence, one CTA group, dominant atmospheric background (CSS gradients/patterns/SVG — not a flat color).
+5. NO cards in the hero. NO floating badges/stickers/stat strips/pill clusters.
+6. Sections after hero: Services, Visit/Hours, Contact — one job each.
+7. 2–3 intentional CSS motions (fade/rise/soft parallax feel). Subtle, not noisy.
+8. Niche visual direction (NOT generic purple, NOT cream+terracotta newspaper). Example: tennis=clay court + night green; dental=clean clinical light + deep teal; physio=warm stone + charcoal.
+9. Sticky thin demo strip: "Demo by insomnia_Automaton — facts only; no invented pricing."
+10. Mobile-first, accessible contrast, working tel:/mailto: when known.
+11. Self-contained — must look pitch-ready to a paying owner.
+
+Return raw HTML starting with <!DOCTYPE html>.`;
+}
+
+function extractHtml(text: string): string | null {
+  const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  const raw = (fenced?.[1] || text).trim();
+  const start = raw.search(/<!DOCTYPE html>|<html[\s>]/i);
+  if (start < 0) return null;
+  let html = raw.slice(start);
+  const end = html.lastIndexOf("</html>");
+  if (end >= 0) html = html.slice(0, end + 7);
+  if (html.length < 3500) return null;
+  return html;
+}
+
+export function craftsmanshipTemplate(facts: SiteFacts): string {
+  const theme = nicheTheme(facts.category);
+  const services = facts.services?.length
+    ? facts.services
+    : defaultServices(facts.category);
+  const phone = facts.phone;
+  const email = facts.email;
+  const hours = facts.hours || "Ask us for current hours";
+  const ctas = [
+    phone
+      ? `<a class="btn primary" href="tel:${escapeAttr(phone)}">Call ${escape(phone)}</a>`
+      : "",
+    email
+      ? `<a class="btn ghost" href="mailto:${escapeAttr(email)}">Email</a>`
+      : `<a class="btn ghost" href="#contact">Enquire</a>`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${escape(facts.name)} | ${escape(facts.city)}</title>
+<title>${escape(facts.name)} · ${escape(facts.city)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=${theme.fontQuery}&display=swap" rel="stylesheet"/>
 <style>
-  :root { --ink:#14201c; --moss:#1f6f5b; --sand:#f3efe6; --clay:#c45c26; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif; color:var(--ink); background:
-    radial-gradient(1200px 600px at 10% -10%, #d9efe7 0%, transparent 55%),
-    linear-gradient(180deg, #f7f3ea 0%, #e7efe9 100%); }
-  header { min-height: 78vh; padding: 2rem clamp(1.2rem,4vw,4rem); display:flex; flex-direction:column; justify-content:flex-end;
-    background: linear-gradient(120deg, rgba(20,32,28,.88), rgba(31,111,91,.55)),
-    url('data:image/svg+xml,${encodeURIComponent(heroSvg(facts.category))}') center/cover; color:#f8f5ee; }
-  .brand { font-size: clamp(2.4rem, 7vw, 4.8rem); letter-spacing: -0.03em; line-height: .95; max-width: 12ch; animation: rise .8s ease both; }
-  .lede { max-width: 36ch; font-size: 1.15rem; margin: 1rem 0 1.5rem; opacity:.92; animation: rise .9s .1s ease both; }
-  .cta { display:flex; gap:.75rem; flex-wrap:wrap; animation: rise 1s .15s ease both; }
-  a.btn { text-decoration:none; padding:.85rem 1.2rem; border-radius:999px; font-family: ui-sans-serif, system-ui, sans-serif; font-weight:600; }
-  .btn-primary { background: var(--clay); color:white; }
-  .btn-ghost { border:1px solid rgba(255,255,255,.55); color:white; }
-  main { padding: 3rem clamp(1.2rem,4vw,4rem); display:grid; gap:2.5rem; }
-  section h2 { font-size:1.8rem; margin:0 0 .75rem; }
-  .grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); }
-  .item { padding:1rem 0; border-top:1px solid rgba(20,32,28,.15); font-family: ui-sans-serif, system-ui, sans-serif; }
-  footer { padding: 2rem clamp(1.2rem,4vw,4rem); font-family: ui-sans-serif, system-ui, sans-serif; font-size:.9rem; opacity:.8; }
-  .demo-banner { position:sticky; top:0; background:#14201c; color:#f3efe6; padding:.55rem 1rem; font-family: ui-sans-serif, system-ui, sans-serif; font-size:.85rem; z-index:5; }
-  @keyframes rise { from { opacity:0; transform: translateY(12px);} to { opacity:1; transform:none; } }
+:root{
+  --bg:${theme.bg}; --ink:${theme.ink}; --muted:${theme.muted};
+  --accent:${theme.accent}; --accent2:${theme.accent2}; --line:${theme.line};
+  --display:${theme.display}; --body:${theme.body};
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--body),Georgia,serif;color:var(--ink);background:var(--bg)}
+.demo-banner{position:sticky;top:0;z-index:20;background:rgba(0,0,0,.88);color:#f4f1ea;font:600 .78rem/1.3 var(--body),sans-serif;letter-spacing:.04em;padding:.55rem 1rem;text-align:center}
+.hero{min-height:100svh;display:grid;align-content:end;padding:clamp(1.25rem,4vw,3.5rem);position:relative;overflow:hidden;color:${theme.heroText}}
+.hero::before{content:"";position:absolute;inset:0;background:${theme.heroBg};z-index:0}
+.hero::after{content:"";position:absolute;inset:0;background:${theme.heroOverlay};z-index:1}
+.hero-inner{position:relative;z-index:2;max-width:72rem}
+.brand{font-family:var(--display),serif;font-size:clamp(3.2rem,10vw,7rem);line-height:.9;letter-spacing:-.04em;margin:0;max-width:14ch;animation:rise .9s ease both}
+.headline{font-family:var(--display),serif;font-size:clamp(1.35rem,3vw,2rem);font-weight:500;margin:1.1rem 0 .6rem;max-width:22ch;animation:rise 1s .08s ease both}
+.lede{font-size:1.05rem;max-width:38ch;opacity:.92;margin:0 0 1.6rem;animation:rise 1.05s .14s ease both}
+.cta{display:flex;flex-wrap:wrap;gap:.75rem;animation:rise 1.1s .2s ease both}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:.95rem 1.35rem;border-radius:999px;text-decoration:none;font:600 .95rem var(--body),sans-serif}
+.btn.primary{background:var(--accent);color:${theme.primaryText}}
+.btn.ghost{border:1px solid currentColor;color:inherit}
+.orb{position:absolute;border-radius:50%;filter:blur(2px);opacity:.55;animation:drift 14s ease-in-out infinite alternate;z-index:1}
+.orb.a{width:42vmin;height:42vmin;right:-8vmin;top:8vmin;background:${theme.orbA}}
+.orb.b{width:34vmin;height:34vmin;left:-6vmin;bottom:18vmin;background:${theme.orbB};animation-delay:-4s}
+main{padding:clamp(2.5rem,6vw,5rem) clamp(1.25rem,4vw,3.5rem);display:grid;gap:clamp(2.5rem,6vw,4.5rem);max-width:72rem}
+section h2{font-family:var(--display),serif;font-size:clamp(1.8rem,4vw,2.6rem);margin:0 0 .35rem;letter-spacing:-.02em}
+section .sub{color:var(--muted);margin:0 0 1.4rem;max-width:48ch}
+.services{display:grid;gap:0;border-top:1px solid var(--line)}
+.services li{list-style:none;padding:1.05rem 0;border-bottom:1px solid var(--line);font-size:1.08rem;display:flex;justify-content:space-between;gap:1rem;animation:rise .7s ease both}
+.services li span{color:var(--muted);font-size:.85rem}
+.visit,.contact{display:grid;gap:1rem;grid-template-columns:1.2fr .8fr}
+@media (max-width:720px){.visit,.contact{grid-template-columns:1fr}}
+.block p{margin:.35rem 0;line-height:1.55}
+footer{padding:2rem clamp(1.25rem,4vw,3.5rem) 3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line)}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-3%,4%,0) scale(1.06)}}
 </style>
 </head>
 <body>
-<div class="demo-banner">Demo by insomnia_Automaton — facts only; pricing shown only when publicly known.</div>
-<header>
-  <div class="brand">${escape(facts.name)}</div>
-  <p class="lede">${escape(facts.category)} in ${escape(facts.city)}, ${escape(facts.country)}. A clear home on the web for hours, services, and contact.</p>
-  <div class="cta">
-    <a class="btn btn-primary" href="tel:${escape(phone)}">Call</a>
-    <a class="btn btn-ghost" href="mailto:${escape(email)}">Email</a>
+<div class="demo-banner">Demo by insomnia_Automaton — facts only; no invented pricing.</div>
+<header class="hero">
+  <div class="orb a" aria-hidden="true"></div>
+  <div class="orb b" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <h1 class="brand">${escape(facts.name)}</h1>
+    <p class="headline">${escape(theme.headline)}</p>
+    <p class="lede">${escape(facts.category)} in ${escape(facts.city)}, ${escape(facts.country)}. A clear, modern home for hours, services, and the next booking.</p>
+    <div class="cta">${ctas}</div>
   </div>
 </header>
 <main>
   <section>
-    <h2>Services</h2>
-    <div class="grid">
-      ${services.map((s) => `<div class="item">${escape(s)}</div>`).join("")}
+    <h2>What we offer</h2>
+    <p class="sub">Straight answers — contact us for current pricing.</p>
+    <ul class="services">
+      ${services
+        .map(
+          (s, i) =>
+            `<li style="animation-delay:${0.05 * i}s">${escape(s)}<span>Enquire</span></li>`,
+        )
+        .join("")}
+    </ul>
+  </section>
+  <section class="visit">
+    <div class="block">
+      <h2>Visit</h2>
+      <p class="sub">Find us in ${escape(facts.city)}.</p>
+      <p><strong>Hours</strong><br/>${escape(hours)}</p>
+      <p><strong>Location</strong><br/>${escape(facts.city)}, ${escape(facts.country)}</p>
+    </div>
+    <div class="block" id="contact">
+      <h2>Contact</h2>
+      <p class="sub">Prefer the channel you already use with customers.</p>
+      ${phone ? `<p><strong>Phone</strong><br/><a href="tel:${escapeAttr(phone)}">${escape(phone)}</a></p>` : "<p>Phone on request.</p>"}
+      ${email ? `<p><strong>Email</strong><br/><a href="mailto:${escapeAttr(email)}">${escape(email)}</a></p>` : "<p>Email on request.</p>"}
+      <p>${escape(facts.note || "Tell us what you need — we will respond with facts, not fluff.")}</p>
     </div>
   </section>
-  <section>
-    <h2>Hours & location</h2>
-    <p>${escape(hours)}</p>
-    <p>${escape(facts.city)}, ${escape(facts.country)}</p>
-  </section>
-  <section>
-    <h2>Book / enquire</h2>
-    <p>Prefer WhatsApp, phone, or email — whichever you already use with customers. ${escape(facts.note || "Contact for current pricing.")}</p>
-  </section>
 </main>
-<footer>Generated demo · not affiliated until the business owner accepts and pays.</footer>
+<footer>Demo generated for ${escape(facts.name)}. Not affiliated until the owner accepts and pays.</footer>
 </body>
 </html>`;
+}
+
+type Theme = {
+  bg: string;
+  ink: string;
+  muted: string;
+  accent: string;
+  accent2: string;
+  line: string;
+  display: string;
+  body: string;
+  fontQuery: string;
+  heroBg: string;
+  heroOverlay: string;
+  heroText: string;
+  primaryText: string;
+  orbA: string;
+  orbB: string;
+  headline: string;
+};
+
+function nicheTheme(category: string): Theme {
+  const c = category.toLowerCase();
+  if (c.includes("tennis") || c.includes("racquet") || c.includes("sport")) {
+    return {
+      bg: "#f2efe6",
+      ink: "#1a2118",
+      muted: "#5c6558",
+      accent: "#c45c26",
+      accent2: "#1f4d3a",
+      line: "rgba(26,33,24,.16)",
+      display: '"Fraunces"',
+      body: '"DM Sans"',
+      fontQuery: "family=DM+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,500;700",
+      heroBg:
+        "radial-gradient(1000px 700px at 80% 10%, #2f6b4f 0%, transparent 55%), linear-gradient(135deg,#12261c 0%,#1f4d3a 45%,#3a2a1c 100%)",
+      heroOverlay: "linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.55))",
+      heroText: "#f6f1e7",
+      primaryText: "#fff",
+      orbA: "rgba(196,92,38,.35)",
+      orbB: "rgba(255,255,255,.08)",
+      headline: "Courts, coaching, community — finally clear online.",
+    };
+  }
+  if (c.includes("dental") || c.includes("clinic") || c.includes("physio")) {
+    return {
+      bg: "#f5f7f8",
+      ink: "#152028",
+      muted: "#5b6b75",
+      accent: "#0f766e",
+      accent2: "#134e4a",
+      line: "rgba(21,32,40,.14)",
+      display: '"Libre Baskerville"',
+      body: '"Source Sans 3"',
+      fontQuery:
+        "family=Libre+Baskerville:wght@400;700&family=Source+Sans+3:wght@400;600;700",
+      heroBg:
+        "radial-gradient(900px 600px at 15% 0%, #99f6e4 0%, transparent 50%), linear-gradient(160deg,#0b1c24 0%,#134e4a 55%,#1e293b 100%)",
+      heroOverlay: "linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.5))",
+      heroText: "#ecfeff",
+      primaryText: "#ecfeff",
+      orbA: "rgba(45,212,191,.28)",
+      orbB: "rgba(148,163,184,.18)",
+      headline: "Care that feels calm before you arrive.",
+    };
+  }
+  if (c.includes("salon") || c.includes("beauty") || c.includes("hair")) {
+    return {
+      bg: "#faf7f2",
+      ink: "#22181c",
+      muted: "#6d5c63",
+      accent: "#9f1239",
+      accent2: "#4c0519",
+      line: "rgba(34,24,28,.14)",
+      display: '"Playfair Display"',
+      body: '"Karla"',
+      fontQuery: "family=Karla:wght@400;600;700&family=Playfair+Display:wght@500;700",
+      heroBg:
+        "radial-gradient(800px 500px at 70% 20%, #fda4af 0%, transparent 55%), linear-gradient(145deg,#1c1014 0%,#4c0519 50%,#292524 100%)",
+      heroOverlay: "linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.55))",
+      heroText: "#fff1f2",
+      primaryText: "#fff",
+      orbA: "rgba(251,113,133,.3)",
+      orbB: "rgba(255,255,255,.08)",
+      headline: "Your chair. Your look. Easy to book.",
+    };
+  }
+  if (c.includes("restaurant") || c.includes("kitchen") || c.includes("cafe")) {
+    return {
+      bg: "#f7f3ec",
+      ink: "#1c1917",
+      muted: "#78716c",
+      accent: "#b45309",
+      accent2: "#431407",
+      line: "rgba(28,25,23,.14)",
+      display: '"Cormorant Garamond"',
+      body: '"Manrope"',
+      fontQuery:
+        "family=Cormorant+Garamond:wght@500;700&family=Manrope:wght@400;600;700",
+      heroBg:
+        "radial-gradient(900px 600px at 20% 10%, #fdba74 0%, transparent 50%), linear-gradient(150deg,#1c1917 0%,#44403c 40%,#78350f 100%)",
+      heroOverlay: "linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.6))",
+      heroText: "#fff7ed",
+      primaryText: "#fff7ed",
+      orbA: "rgba(251,146,60,.28)",
+      orbB: "rgba(255,255,255,.07)",
+      headline: "Tables, taste, and tonight’s plan — in one place.",
+    };
+  }
+  return {
+    bg: "#f4f6f5",
+    ink: "#14201c",
+    muted: "#5f6f68",
+    accent: "#0d9488",
+    accent2: "#115e59",
+    line: "rgba(20,32,28,.14)",
+    display: '"Fraunces"',
+    body: '"DM Sans"',
+    fontQuery: "family=DM+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;700",
+    heroBg:
+      "radial-gradient(900px 600px at 75% 0%, #5eead4 0%, transparent 50%), linear-gradient(150deg,#10201c 0%,#134e4a 55%,#1c1917 100%)",
+    heroOverlay: "linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.55))",
+    heroText: "#f0fdfa",
+    primaryText: "#042f2e",
+    orbA: "rgba(45,212,191,.25)",
+    orbB: "rgba(255,255,255,.08)",
+    headline: "A proper website for a real local business.",
+  };
 }
 
 function defaultServices(category: string): string[] {
@@ -85,11 +324,11 @@ function defaultServices(category: string): string[] {
   if (c.includes("salon") || c.includes("beauty"))
     return ["Cuts & styling", "Color", "Treatments", "Appointments"];
   if (c.includes("clinic") || c.includes("dental") || c.includes("physio"))
-    return ["Consultations", "Treatments", "New patients", "Insurance queries"];
-  if (c.includes("restaurant") || c.includes("cafe"))
-    return ["Menu highlights", "Reservations", "Catering", "Private events"];
-  if (c.includes("gym") || c.includes("fitness") || c.includes("yoga"))
-    return ["Classes", "Memberships", "Personal training", "Intro sessions"];
+    return ["Consultations", "Treatments", "New patients", "Follow-ups"];
+  if (c.includes("restaurant") || c.includes("cafe") || c.includes("kitchen"))
+    return ["Dining", "Reservations", "Private events", "Takeaway enquiry"];
+  if (c.includes("gym") || c.includes("fitness") || c.includes("yoga") || c.includes("tennis") || c.includes("sport"))
+    return ["Court / class bookings", "Coaching", "Memberships", "Intro sessions"];
   return ["Core services", "Bookings", "Location", "Contact"];
 }
 
@@ -101,40 +340,41 @@ function escape(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function heroSvg(category: string): string {
-  const tone = category.toLowerCase().includes("sport") ? "#1f6f5b" : "#2a4a5a";
-  return `<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'>
-  <defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'>
-  <stop stop-color='${tone}'/><stop offset='1' stop-color='#0e1a17'/>
-  </linearGradient></defs>
-  <rect width='1600' height='900' fill='url(#g)'/>
-  <circle cx='1200' cy='200' r='220' fill='rgba(255,255,255,.06)'/>
-  <circle cx='300' cy='700' r='280' fill='rgba(196,92,38,.12)'/>
-  </svg>`;
+function escapeAttr(s: string): string {
+  return escape(s).replace(/'/g, "&#39;");
 }
 
-export function qaScoreHtml(html: string, facts: SiteFacts): { score: number; notes: string } {
+export function qaScoreHtml(
+  html: string,
+  facts: SiteFacts,
+): { score: number; notes: string } {
   let score = 0;
   const notes: string[] = [];
-  if (html.includes(facts.name)) {
-    score += 20;
-  } else notes.push("Missing business name");
-  if (html.includes("viewport")) {
+  if (html.includes(facts.name)) score += 12;
+  else notes.push("Missing business name");
+  if (html.includes("viewport")) score += 8;
+  else notes.push("Missing mobile viewport");
+  if (/fonts\.googleapis|font-family:\s*["']?(Fraunces|Playfair|Libre|Cormorant)/i.test(html))
+    score += 12;
+  else notes.push("Weak typography");
+  if (/min-height:\s*(100svh|100vh|78vh|85vh)/i.test(html)) score += 12;
+  else notes.push("Hero not full-bleed enough");
+  if (/@keyframes|animation:/i.test(html)) score += 10;
+  else notes.push("No motion");
+  if (html.includes("tel:") || /Call /i.test(html)) score += 8;
+  if (html.includes("mailto:") || /Email|Enquire/i.test(html)) score += 8;
+  if (!/\$\d{2,}/.test(html) && !/£\d{2,}/.test(html) && !/A\$\d{2,}/.test(html)) {
     score += 15;
-  } else notes.push("Missing mobile viewport");
-  if (html.includes("tel:") || html.includes("Call")) {
-    score += 15;
-  } else notes.push("Missing call CTA");
-  if (html.includes("mailto:") || html.includes("Email")) {
-    score += 10;
-  } else notes.push("Missing email CTA");
-  if (!/\$\d{2,}/.test(html) && !/£\d{2,}/.test(html)) {
-    score += 20;
-    notes.push("No invented prices (good)");
-  } else {
-    notes.push("Possible invented prices — review");
+    notes.push("No invented prices");
+  } else notes.push("Possible invented prices");
+  if (html.includes(facts.city)) score += 5;
+  if (html.length > 5000) score += 10;
+  else if (html.length > 3500) score += 5;
+  else notes.push("Too thin for a pitch demo");
+  if (/demo-banner|insomnia_Automaton/i.test(html)) score += 5;
+  if (/Inter|Roboto|Arial|system-ui/i.test(html) && !/DM Sans|Fraunces|Playfair/i.test(html)) {
+    score -= 10;
+    notes.push("Generic font stack");
   }
-  if (html.includes(facts.city)) score += 10;
-  if (html.length > 800) score += 10;
-  return { score: Math.min(100, score), notes: notes.join("; ") };
+  return { score: Math.max(0, Math.min(100, score)), notes: notes.join("; ") };
 }
