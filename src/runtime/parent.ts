@@ -17,7 +17,10 @@ import {
   createIdeaPack,
   listProspects,
 } from "@/business/pipeline";
-import { discoverRealProspects } from "@/business/research";
+import {
+  discoverRealProspects,
+  seedNoWebsiteProspects,
+} from "@/business/research";
 import { infer } from "@/inference/router";
 import { localCompute, localHosting, payments } from "@/adapters/free";
 import { conwayComputeStub } from "@/adapters/conway-stub";
@@ -263,22 +266,49 @@ export async function runHeartbeatTick(): Promise<{
     return { survival, actions };
   }
 
-  // Research real prospects when pipeline is thin
+  // Drop any prospects that already have a real website — we only sell to no-site businesses
+  const withSites = getDb()
+    .prepare(
+      `SELECT id, name, website FROM prospects WHERE website IS NOT NULL AND website != ''
+       AND website NOT LIKE '%facebook%' AND website NOT LIKE '%instagram%'
+       AND website NOT LIKE '%fresha%' AND website NOT LIKE '%setmore%'
+       AND website NOT LIKE '%booksy%' AND website NOT LIKE '%vagaro%'`,
+    )
+    .all() as { id: string; name: string; website: string }[];
+  if (withSites.length) {
+    getDb().pragma("foreign_keys = OFF");
+    for (const row of withSites) {
+      getDb().prepare(`DELETE FROM demos WHERE prospect_id = ?`).run(row.id);
+      getDb().prepare(`DELETE FROM deals WHERE prospect_id = ?`).run(row.id);
+      getDb().prepare(`DELETE FROM prospects WHERE id = ?`).run(row.id);
+      actions.push(`dropped_has_website:${row.name}`);
+    }
+    getDb().pragma("foreign_keys = ON");
+  }
+
+  // Research real no-website prospects when pipeline is thin
   const prospectCount = (
     getDb().prepare(`SELECT COUNT(*) as c FROM prospects`).get() as { c: number }
   ).c;
   if (prospectCount < 5) {
     try {
-      const ids = await discoverRealProspects(2);
-      if (ids.length) actions.push(`researched:${ids.length}`);
-      else actions.push("research_empty");
+      if (prospectCount === 0) {
+        const ids = seedNoWebsiteProspects();
+        actions.push(`seeded_no_website:${ids.length}`);
+      } else {
+        const ids = await discoverRealProspects(2);
+        if (ids.length) actions.push(`researched:${ids.length}`);
+        else actions.push("research_empty");
+      }
     } catch (e) {
       actions.push(`research_skip:${(e as Error).message}`);
     }
   }
 
+  // Only aim at businesses with no dedicated website
   const prospects = listProspects()
     .filter((p) => mocksAllowed() || p.source !== "seed")
+    .filter((p) => !p.website || /facebook|instagram|fresha|setmore|booksy|vagaro/i.test(p.website))
     .slice(0, 6);
 
   // Build demos for prospects (email optional at build time)

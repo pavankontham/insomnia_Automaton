@@ -18,210 +18,214 @@ export type ProspectDossier = {
 
 /** Curated Unsplash photo IDs — atmospheric, niche-matched (not claimed as business photos). */
 export const NICHE_PHOTOS: Record<string, string[]> = {
-  tennis: [
-    "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&w=1600&q=80",
-    "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=80",
+  cafe: [
+    "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1600&q=80",
+    "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80",
   ],
-  dental: [
-    "https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1600&q=80",
-    "https://images.unsplash.com/photo-1606811841689-23dfdb7ee46b?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80",
+  barber: [
+    "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=1600&q=80",
+    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1200&q=80",
   ],
-  physio: [
-    "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80",
-    "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80",
+  bakery: [
+    "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1600&q=80",
+    "https://images.unsplash.com/photo-1517433670267-08bbd4be890f?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=1200&q=80",
   ],
-  yoga: [
-    "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1600&q=80",
-    "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?auto=format&fit=crop&w=1200&q=80",
+  painting: [
+    "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1600&q=80",
+    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80",
   ],
 };
 
 export function photosForCategory(category: string): string[] {
   const c = category.toLowerCase();
-  if (c.includes("tennis") || c.includes("sport") || c.includes("racquet"))
-    return NICHE_PHOTOS.tennis;
-  if (c.includes("dental")) return NICHE_PHOTOS.dental;
-  if (c.includes("physio")) return NICHE_PHOTOS.physio;
-  if (c.includes("yoga") || c.includes("salon")) return NICHE_PHOTOS.yoga;
-  return NICHE_PHOTOS.yoga;
+  if (c.includes("barber") || c.includes("hair")) return NICHE_PHOTOS.barber;
+  if (c.includes("bakery") || c.includes("bake")) return NICHE_PHOTOS.bakery;
+  if (c.includes("paint") || c.includes("trade") || c.includes("contractor"))
+    return NICHE_PHOTOS.painting;
+  if (c.includes("cafe") || c.includes("café") || c.includes("coffee") || c.includes("restaurant"))
+    return NICHE_PHOTOS.cafe;
+  return NICHE_PHOTOS.cafe;
 }
 
-/** Hand-researched dossiers for current prospects (public facts only). */
+/**
+ * Hand-researched dossiers — ONLY businesses verified with no dedicated website
+ * (Facebook / Fresha / directory listings only). Public facts only.
+ */
 export const RESEARCHED_DOSSIERS: Record<string, ProspectDossier> = {
-  "Austin Tennis Club": {
-    tagline: "Tennis + community for Austin’s LGBT players and friends",
+  "El's Cafe": {
+    tagline: "Dog-friendly café with a proper bar — Carshalton",
     about:
-      "Austin Tennis Club (ATC) is a non-profit promoting tennis and social activities among the Austin-area LGBT community. Membership is open to any adult who endorses ATC’s purposes — beginners through experts welcome.",
-    addresses: [
-      {
-        label: "Tuesday social tennis",
-        line: "Austin Tennis Center — 7800 Johnny Morris Rd, Austin, TX 78724",
-      },
-      {
-        label: "Friday social tennis",
-        line: "South Austin Tennis Center — 1000 Cumberland Rd, Austin, TX 78704",
-      },
-    ],
-    email: "umpire@austintennisclub.org",
-    hours: "Social tennis nights at partner courts (Tue / Fri). Facility hours vary by tennis center.",
+      "El’s Cafe at 3 Nightingale Road, Carshalton is a classic British café with a twist: a real bar along one wall, spirit bottles in the window, a garden out back, and a warm welcome for dogs. Owner Elvis runs the place himself — English breakfast, strong tea, and regulars who know “the usual.”",
+    address: "3 Nightingale Road, Carshalton, SM5 2DN, UK",
+    phone: "+44 20 3158 9745",
+    email: "elscafe1@icloud.com",
+    hours: "Independent café hours — call or message for today’s opening times.",
     services: [
-      "Social tennis nights",
-      "Membership directory & ladders",
-      "Year-round social events",
-      "Beginner → expert welcome",
+      "Full English breakfast",
+      "Hot drinks & tea",
+      "Café meals",
+      "Dog-friendly seating",
+      "Garden seating",
+      "Bar / evening drinks",
     ],
     highlights: [
-      "Non-profit, community-first",
-      "Three membership levels (free → full-year)",
-      "Instagram @AustinTennisClub",
+      "Featured in Your Local Guardian (dog-friendly café with bar)",
+      "Owner-operated by Elvis",
+      "No dedicated website — Facebook / listings only",
+      "Registered company EL'S CAFE LTD (14617969)",
     ],
     social: [
-      { label: "Instagram", url: "https://www.instagram.com/austintennisclub" },
-      { label: "Website", url: "https://www.austintennisclub.org" },
+      {
+        label: "Facebook",
+        url: "https://www.facebook.com/profile.php?id=100091838301804",
+      },
     ],
     publicPricing: [
-      { label: "Free membership", detail: "Pay as you play" },
-      { label: "Half-year", detail: "$75 / half-year (listed on their site)" },
-      { label: "Full-year", detail: "$150 / full-year (listed on their site)" },
+      {
+        label: "English breakfast + tea",
+        detail: "About £8 (reported in local press — confirm on visit)",
+      },
     ],
-    mapQuery: "Austin Tennis Center 7800 Johnny Morris Rd Austin TX",
-    photoQueries: ["tennis", "austin"],
-    bookingHint: "Ask about membership or the next social tennis night.",
+    mapQuery: "3 Nightingale Road Carshalton SM5 2DN",
+    photoQueries: ["cafe", "carshalton"],
+    bookingHint: "Ask about breakfast, dog-friendly seating, or evening bar hours.",
     sourceUrls: [
-      "https://www.austintennisclub.org/",
-      "https://www.austintennisclub.org/contact",
-      "https://www.austintennisclub.org/membership",
+      "https://www.yourlocalguardian.co.uk/news/25381937.els-cafe-carshalton-dog-friendly-cafe-bar/",
+      "https://ratings.food.gov.uk/business/1620596/els-cafe/online-ratings",
+      "https://find-and-update.company-information.service.gov.uk/company/14617969",
     ],
   },
-  "Brighton Dental Clinic": {
-    tagline: "City-centre dentistry on Old Steine",
+  "Cassidy's Cafe LLC": {
+    tagline: "Homemade breakfast, lunch, dinner — downtown Wabeno",
     about:
-      "Brighton Dental Clinic serves patients from St James’s Mansions on Old Steine in Brighton city centre, with online booking and WhatsApp options for appointments.",
-    address: "St James’s Mansions, Old Steine, Brighton, BN1 1EN, UK",
-    phone: "+44 1273 570 700",
-    email: "smile@brightondentalclinic.co.uk",
-    hours: "Contact the practice for current surgery hours.",
+      "Cassidy’s Cafe LLC is a family-style restaurant at 4453 N Branch Street in downtown Wabeno, Wisconsin. About 90% of the menu is homemade — breakfast through dinner, Friday all-you-can-eat fish fry, Saturday steak specials, daily specials, and catering.",
+    address: "4453 N Branch Street, Wabeno, WI 54566, USA",
+    phone: "+1 715-889-1784",
+    email: "cassidyscafe15@yahoo.com",
+    hours: "Call for today’s hours and specials — listed on Facebook.",
     services: [
-      "General dentistry",
-      "Orthodontics",
-      "Periodontics / gum care",
-      "Online appointment booking",
+      "Breakfast, lunch & dinner",
+      "Friday fish fry",
+      "Saturday steak specials",
+      "Daily homemade specials",
+      "Catering",
+      "Dine-in & pickup",
     ],
     highlights: [
-      "WhatsApp: 07312 198 460",
-      "Practice owner Dr Ilias Tzampazis",
-      "City-centre Old Steine location",
+      "Listed on Travel Wisconsin",
+      "Facebook is the main web presence (no dedicated site)",
+      "~1.5K Facebook followers, strong local reviews",
     ],
     social: [
-      { label: "Book online", url: "https://www.brightondentalclinic.co.uk/book" },
-      { label: "Website", url: "https://www.brightondentalclinic.co.uk" },
+      { label: "Facebook", url: "https://www.facebook.com/cassidyscafe/" },
+      {
+        label: "Travel Wisconsin",
+        url: "https://www.travelwisconsin.com/food-drink/restaurants/cassidy-s-cafe-llc",
+      },
     ],
-    mapQuery: "St James's Mansions Old Steine Brighton BN1 1EN",
-    photoQueries: ["dental", "brighton"],
-    bookingHint: "Request a checkup or specialist consult — we’ll mirror your preferred channel.",
+    mapQuery: "4453 N Branch Street Wabeno WI 54566",
+    photoQueries: ["cafe", "wisconsin"],
+    bookingHint: "Ask about today’s specials, fish fry, or catering.",
     sourceUrls: [
-      "https://www.brightondentalclinic.co.uk/contact",
-      "https://www.brightondentalclinic.co.uk/book",
+      "https://www.facebook.com/cassidyscafe/",
+      "https://www.travelwisconsin.com/food-drink/restaurants/cassidy-s-cafe-llc",
     ],
   },
-  "Melbourne Physio Clinic": {
-    tagline: "Physiotherapy in the Dome Building, Collins Street CBD",
+  "Mr Barber": {
+    tagline: "Neighbourhood barbershop on Hanover Road, Rowley Regis",
     about:
-      "Melbourne Physio Clinic is on Level 14, 333 Collins Street in the historic Dome Building — sports and musculoskeletal physio, rehab, ergonomics, and telehealth for CBD and beyond.",
-    address: "Level 14 / 333 Collins Street, Melbourne VIC 3000, Australia",
-    phone: "+61 3 9069 0005",
-    email: "info@melbournephysioclinic.com.au",
-    hours: "CBD clinic — contact reception for appointment times. Telehealth available.",
+      "Mr Barber (MR BARBER LTD) is a well-reviewed barbershop at 71 Hanover Road, Rowley Regis B65 9EE. Walk-ins and family-friendly cuts — parents praise them for kids’ hair. Online presence is Facebook plus a Fresha listing; no branded website.",
+    address: "71 Hanover Road, Rowley Regis, B65 9EE, UK",
+    phone: "+44 7592 105188",
+    email: "mrbarber.rowley@gmail.com",
+    hours: "Mon–Thu 9:00–19:00 · Fri 9:00–19:30 · Sat 8:30–17:30 · Sun closed",
     services: [
-      "Sports & musculoskeletal physio",
-      "Post-surgical rehabilitation",
-      "Running / bike / gym technique analysis",
-      "Ergonomic assessments",
-      "Telehealth consultations",
-      "Pre & postpartum care",
+      "Men’s haircuts",
+      "Kids’ cuts",
+      "Beard / fade styling",
+      "Walk-in friendly service",
     ],
     highlights: [
-      "Between Elizabeth St & Queen St (south side)",
-      "Nearest train: Flinders Street (~300m)",
-      "Trams 31, 48, 109, 112 on Collins St",
+      "4.8★ from 70+ public reviews",
+      "Companies House: MR BARBER LTD (13533265)",
+      "No dedicated website — Facebook / Fresha only",
     ],
     social: [
-      { label: "Book / contact", url: "https://www.melbournephysioclinic.com.au/contact" },
-      { label: "Website", url: "https://www.melbournephysioclinic.com.au" },
+      {
+        label: "Fresha listing",
+        url: "https://www.fresha.com/lvp/mr-barber-barbershop-hanover-road-gnGYz7",
+      },
     ],
-    mapQuery: "333 Collins Street Melbourne VIC 3000",
-    photoQueries: ["physiotherapy", "melbourne"],
-    bookingHint: "Book a consult or telehealth — mention your injury or sport.",
+    mapQuery: "71 Hanover Road Rowley Regis B65 9EE",
+    photoQueries: ["barber", "uk"],
+    bookingHint: "Ask for a walk-in slot or kids’ cut — no booking required on many days.",
     sourceUrls: [
-      "https://www.melbournephysioclinic.com.au/",
-      "https://www.melbournephysioclinic.com.au/contact",
+      "https://www.fresha.com/lvp/mr-barber-barbershop-hanover-road-gnGYz7",
+      "https://datalog.co.uk/browse/detail.php/CompanyNumber/13533265/MR+BARBER+LTD",
     ],
   },
-  "Canopy Yoga": {
-    tagline: "Boutique yoga + smoothie bar in LoHi, Denver",
+  "Ozzy Barber Shop": {
+    tagline: "Walk-in barbershop in Springfield, Chelmsford",
     about:
-      "Canopy Yoga is a boutique studio and smoothie bar at 2525 15th Street in Denver’s Highland / LoHi area — Vinyasa (lightly infrared heated), Vin/Yin, Kundalini, prenatal, candlelit yin, breathwork, and Baby & Me.",
-    address: "2525 15th Street, Unit 1D, Denver, CO 80211, USA",
-    phone: "+1 303-381-0197",
-    email: "hello@canopyyoga.com",
-    hours: "Class-based schedule (e.g. midday + late afternoon/evening blocks). Check the studio app or site for today’s times.",
+      "Ozzy Barber Shop is a walk-in barbershop at 5 Havengore, Springfield, Chelmsford (CM1 6JP area). Open six days, free car park nearby, patient with kids, and Facebook-first online — no dedicated website.",
+    address: "5 Havengore, Springfield, Chelmsford, CM1 6JP, UK",
+    phone: "+44 7576 800889",
+    email: "haydar.335@hotmail.com",
+    hours: "Monday–Saturday 9:00–19:00 · Sunday closed · walk-ins welcome",
     services: [
-      "Vinyasa Flow (heated ~80–85°F)",
-      "Vin / Yin",
-      "Kundalini",
-      "Prenatal yoga",
-      "Candlelit Yin",
-      "Breathwork & Baby & Me",
-      "In-studio smoothie bar",
+      "Men’s & boys’ haircuts",
+      "Walk-in cuts",
+      "Fades & classic styles",
+      "Family-friendly appointments",
     ],
     highlights: [
-      "Spa-like boutique studio aesthetic",
-      "Dedicated booking app (Canopy Yoga)",
-      "LoHi / Highland location",
+      "5★ public reviews mentioning kids’ patience",
+      "Free car park mentioned on listings",
+      "Web presence = Facebook only",
     ],
     social: [
-      { label: "Website", url: "https://www.canopyyoga.com" },
+      {
+        label: "Facebook",
+        url: "https://www.facebook.com/208146205724845",
+      },
     ],
-    mapQuery: "2525 15th Street Unit 1D Denver CO 80211",
-    photoQueries: ["yoga", "denver"],
-    bookingHint: "Reserve a mat or ask about intro / prenatal options.",
-    sourceUrls: ["https://www.canopyyoga.com/"],
-  },
-  "Yoga Center of Denver": {
-    tagline: "Come for a class — leave as a friend",
-    about:
-      "Yoga Center of Denver is a holistic hub on South Broadway with Iyengar, Vinyasa, Yin, aerial, family, prenatal, and more — plus an in-house Prana Spa for massage and Ayurveda-inspired care.",
-    address: "770 S Broadway, Denver, CO 80209, USA",
-    phone: "+1 303-865-9642",
-    email: "info@yogacenterdenver.com",
-    hours: "Front desk available during studio hours — call or email for today’s class board.",
-    services: [
-      "Iyengar, Vinyasa, Yin, Gentle, Restorative",
-      "Aerial / Acro / Ropes",
-      "Pre & postnatal and kids classes",
-      "Yoga teacher training Q&A",
-      "Prana Spa (massage & healing arts)",
-    ],
-    highlights: [
-      "Phone: 303-865-YOGA (9642)",
-      "Community from beginners to advanced",
-      "Spa + yoga under one roof",
-    ],
-    social: [
-      { label: "Class schedule", url: "https://yogacenterdenver.com/class-schedule/" },
-      { label: "Book", url: "https://yogacenterdenver.com/book-now/" },
-      { label: "Website", url: "https://yogacenterdenver.com/" },
-    ],
-    mapQuery: "770 S Broadway Denver CO 80209",
-    photoQueries: ["yoga studio", "denver"],
-    bookingHint: "Pick a class style or spa service — front desk can guide first-timers.",
+    mapQuery: "5 Havengore Chelmsford CM1 6JP",
+    photoQueries: ["barber", "chelmsford"],
+    bookingHint: "Walk-in or call/text to check wait times.",
     sourceUrls: [
-      "https://yogacenterdenver.com/contact-us/",
-      "https://yogacenterdenver.com/",
+      "https://www.beautynailhairsalons.com/GB/Chelmsford/208146205724845/OZZY-Barber-Shop",
+      "https://www.facebook.com/208146205724845",
     ],
+  },
+  "Baker's Diary": {
+    tagline: "Neighbourhood bakery on Rosebank Road, Avondale",
+    about:
+      "Baker’s Diary is a highly rated bakery at 448 Rosebank Road, Avondale, Auckland. Fresh bakes for the local community — Facebook is the shopfront online; no dedicated website found.",
+    address: "448 Rosebank Road, Avondale, Auckland 1026, New Zealand",
+    phone: "+64 27 501 2613",
+    email: "bakersdiarynz@gmail.com",
+    hours: "Check Facebook for today’s bake list and opening hours.",
+    services: [
+      "Fresh bread & pastries",
+      "Cakes & sweet bakes",
+      "Savoury bakery items",
+      "Local pickup",
+    ],
+    highlights: [
+      "4.7★ from 175+ public reviews",
+      "Facebook-first presence (no dedicated site)",
+      "Avondale / Rosebank Road neighbourhood bakery",
+    ],
+    social: [
+      { label: "Facebook", url: "https://www.facebook.com/bakersdiarynz/" },
+    ],
+    mapQuery: "448 Rosebank Road Avondale Auckland 1026",
+    photoQueries: ["bakery", "auckland"],
+    bookingHint: "Ask about today’s bakes, cake orders, or pickup timing.",
+    sourceUrls: ["https://www.facebook.com/bakersdiarynz/"],
   },
 };

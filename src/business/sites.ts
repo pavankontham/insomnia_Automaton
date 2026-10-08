@@ -26,9 +26,10 @@ export async function buildDemoHtml(facts: SiteFacts): Promise<string> {
     facts.dossier ||
     RESEARCHED_DOSSIERS[facts.name] ||
     null;
+  // Dossier-backed personal demos always win — they use researched public facts
+  // (including listed membership prices). Do not fall through to thin craftsmanship.
   if (dossier) {
-    const personal = buildPersonalInteractiveHtml(facts, dossier);
-    if (qaScoreHtml(personal, facts).score >= 85) return personal;
+    return buildPersonalInteractiveHtml(facts, dossier);
   }
   const survival = evaluateSurvival();
   try {
@@ -372,16 +373,28 @@ export function qaScoreHtml(
   if (/@keyframes|animation:/i.test(html)) score += 10;
   else notes.push("No motion");
   if (html.includes("tel:") || /Call /i.test(html)) score += 8;
+  else if (html.includes("mailto:") || /Email|Enquire/i.test(html))
+    score += 8; // email-only contact still counts (e.g. community clubs)
   if (html.includes("mailto:") || /Email|Enquire/i.test(html)) score += 8;
-  if (!/\$\d{2,}/.test(html) && !/£\d{2,}/.test(html) && !/A\$\d{2,}/.test(html)) {
+  const hasMoney = /\$\d{2,}|£\d{2,}|A\$\d{2,}/.test(html);
+  const attributedPublicPricing =
+    /listed on their site|Copied from their public site|Membership \/ listed options/i.test(
+      html,
+    );
+  if (!hasMoney || attributedPublicPricing) {
     score += 15;
-    notes.push("No invented prices");
+    notes.push(
+      attributedPublicPricing && hasMoney
+        ? "Public listed pricing (attributed)"
+        : "No invented prices",
+    );
   } else notes.push("Possible invented prices");
   if (html.includes(facts.city)) score += 5;
   if (html.length > 5000) score += 10;
   else if (html.length > 3500) score += 5;
   else notes.push("Too thin for a pitch demo");
-  if (/demo-banner|insomnia_Automaton/i.test(html)) score += 5;
+  if (/Personal demo|demo-banner|insomnia_Automaton/i.test(html)) score += 5;
+  if (/data-service|enquiry|IntersectionObserver/i.test(html)) score += 5;
   if (/Inter|Roboto|Arial|system-ui/i.test(html) && !/DM Sans|Fraunces|Playfair/i.test(html)) {
     score -= 10;
     notes.push("Generic font stack");

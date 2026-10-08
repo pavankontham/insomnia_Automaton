@@ -221,8 +221,8 @@ footer{padding:2rem clamp(1rem,3vw,2.5rem) 5rem;color:var(--muted);font-size:.85
         )
         .join("")}
       <div class="faq">
-        <details><summary>Is this the live ${esc(facts.name)} site?</summary><p>No — this is a personal demo by insomnia_Automaton using public facts, to show what a clearer site could feel like.</p></details>
-        <details open><summary>Where did the facts come from?</summary><p>${dossier.sourceUrls.map((u) => `<a href="${escAttr(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join("<br/>")}</p></details>
+        <details><summary>Is this the live ${esc(facts.name)} site?</summary><p>No — this is a personal demo by insomnia_Automaton. ${facts.name} does not have a dedicated website yet; this shows what one could feel like using their public facts.</p></details>
+        <details open><summary>Where did the facts come from?</summary><p>Public listings only (not a business website — they don’t have one yet):<br/>${dossier.sourceUrls.map((u) => `<a href="${escAttr(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join("<br/>")}</p></details>
       </div>
     </div>
     <form id="enquiry" novalidate>
@@ -339,60 +339,60 @@ footer{padding:2rem clamp(1rem,3vw,2.5rem) 5rem;color:var(--muted);font-size:.85
 
 function themeFor(category: string) {
   const c = category.toLowerCase();
-  if (c.includes("tennis") || c.includes("sport")) {
+  if (c.includes("barber") || c.includes("hair")) {
     return {
-      ink: "#1a2118",
-      muted: "#5c6558",
-      bg: "#f3efe6",
-      accent: "#c45c26",
-      line: "rgba(26,33,24,.14)",
+      ink: "#1c1917",
+      muted: "#57534e",
+      bg: "#f5f0e8",
+      accent: "#b45309",
+      line: "rgba(28,25,23,.14)",
       display: '"Fraunces"',
       body: '"DM Sans"',
       fonts: "family=DM+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;700",
-      heroText: "#f6f1e7",
-      veil: "linear-gradient(180deg,rgba(12,28,20,.35),rgba(12,28,20,.78))",
+      heroText: "#faf6ef",
+      veil: "linear-gradient(180deg,rgba(20,12,8,.35),rgba(20,12,8,.8))",
     };
   }
-  if (c.includes("dental")) {
+  if (c.includes("bakery") || c.includes("bake")) {
     return {
-      ink: "#152028",
-      muted: "#5b6b75",
-      bg: "#f5f7f8",
-      accent: "#0f766e",
-      line: "rgba(21,32,40,.12)",
+      ink: "#292524",
+      muted: "#78716c",
+      bg: "#faf6f0",
+      accent: "#b45309",
+      line: "rgba(41,37,36,.12)",
+      display: '"Playfair Display"',
+      body: '"Karla"',
+      fonts: "family=Karla:wght@400;600;700&family=Playfair+Display:wght@500;700",
+      heroText: "#fff7ed",
+      veil: "linear-gradient(180deg,rgba(60,30,10,.3),rgba(40,20,8,.78))",
+    };
+  }
+  if (c.includes("paint") || c.includes("trade") || c.includes("contractor")) {
+    return {
+      ink: "#172554",
+      muted: "#475569",
+      bg: "#f8fafc",
+      accent: "#1d4ed8",
+      line: "rgba(23,37,84,.12)",
       display: '"Libre Baskerville"',
       body: '"Source Sans 3"',
       fonts:
         "family=Libre+Baskerville:wght@400;700&family=Source+Sans+3:wght@400;600;700",
-      heroText: "#ecfeff",
-      veil: "linear-gradient(180deg,rgba(11,28,36,.25),rgba(11,28,36,.75))",
+      heroText: "#eff6ff",
+      veil: "linear-gradient(180deg,rgba(15,23,42,.35),rgba(15,23,42,.8))",
     };
   }
-  if (c.includes("physio")) {
-    return {
-      ink: "#152028",
-      muted: "#5b6b75",
-      bg: "#f4f7f6",
-      accent: "#0d9488",
-      line: "rgba(21,32,40,.12)",
-      display: '"Libre Baskerville"',
-      body: '"Source Sans 3"',
-      fonts:
-        "family=Libre+Baskerville:wght@400;700&family=Source+Sans+3:wght@400;600;700",
-      heroText: "#f0fdfa",
-      veil: "linear-gradient(180deg,rgba(15,40,40,.3),rgba(15,40,40,.75))",
-    };
-  }
+  // cafe / restaurant default
   return {
-    ink: "#22181c",
-    muted: "#6d5c63",
-    bg: "#faf7f2",
-    accent: "#9f1239",
-    line: "rgba(34,24,28,.12)",
-    display: '"Playfair Display"',
-    body: '"Karla"',
-    fonts: "family=Karla:wght@400;600;700&family=Playfair+Display:wght@500;700",
-    heroText: "#fff1f2",
-    veil: "linear-gradient(180deg,rgba(40,10,20,.3),rgba(40,10,20,.75))",
+    ink: "#1c1917",
+    muted: "#57534e",
+    bg: "#f7f3eb",
+    accent: "#9a3412",
+    line: "rgba(28,25,23,.12)",
+    display: '"Fraunces"',
+    body: '"DM Sans"',
+    fonts: "family=DM+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;700",
+    heroText: "#faf6ef",
+    veil: "linear-gradient(180deg,rgba(40,20,10,.32),rgba(30,14,8,.82))",
   };
 }
